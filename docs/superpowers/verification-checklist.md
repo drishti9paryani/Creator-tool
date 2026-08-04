@@ -13,10 +13,10 @@ Legend: ✅ matches · ⚠️ partial / cosmetic diff · ❌ missing · ➕ infe
 | 1 | Wizard — Choose your format (Short/Video cards, Prev/Next/Skip, X) | yes | yes | ✅ |
 | 2 | Wizard — Describe your story idea (6 chips, textarea, send) | yes | yes | ✅ |
 | 3 | Wizard — Select a story (loading → 3 outline cards; regenerate → 2nd trio; select highlights) | yes | yes | ✅ |
-| 4 | Wizard — **Take a pass at the summary** (editable story summary/refine step after selecting) | yes | **no** | ❌ |
+| 4 | Wizard — **Take a pass at the summary** (editable story summary/refine step after selecting) | yes | yes | ✅ (added, commit ce546d0) |
 | 5 | Wizard — Establish your visual style (style grid, select highlights) | yes | yes | ✅ |
-| 6 | Wizard — **Your visual style** (confirmation of chosen style) | yes | **no** | ❌ |
-| 7 | Wizard — **Review your creative brief** (brief text + hero image before create) | yes | **no** | ❌ |
+| 6 | Wizard — **Your visual style** (confirmation of chosen style) | yes | yes | ✅ (added, commit ce546d0) |
+| 7 | Wizard — **Review your creative brief** (brief text + hero image before create) | yes | yes | ✅ (added, commit ce546d0) |
 | 8 | Project init toasts (Initializing → Applying style → Saving → Project ready) | yes | yes | ✅ |
 | 9 | Asset Designer — Characters row (Indra/Yashoda/Krishna/Nandu + Add) | yes | yes | ✅ |
 | 10 | Asset Designer — Locations row (storm/village/hill/cave + Add) | yes | yes | ✅ |
@@ -29,15 +29,15 @@ Legend: ✅ matches · ⚠️ partial / cosmetic diff · ❌ missing · ➕ infe
 | 17 | Editor (timeline + preview player) | briefly | yes | ➕ inferred (spec §9) |
 | 18 | Global — bottom Command Bar (all workspace pages) | yes | yes | ✅ |
 | 19 | Global — bottom-right toasts | yes | yes | ✅ |
-| 20 | TopBar — **Creative Brief** button opens the brief | yes (button + brief screen) | button present, **no brief panel** | ❌ |
+| 20 | TopBar — **Creative Brief** button opens the brief | yes (button + brief screen) | opens brief modal | ✅ (added, commit ce546d0) |
 | 21 | State persistence across reloads | yes ("Saving…") | yes (IndexedDB) | ✅ |
 | 22 | Responsiveness | (desktop recording) | responsive grids added | ✅ |
 
 ## Gaps to close (ranked)
 
-1. **Wizard refine + brief steps (#4, #6, #7, #20).** The video's wizard is longer than the build: after choosing a story it goes *Select a story → Take a pass at the summary → Establish visual style → Your visual style → Review your creative brief → create*. The build collapses this to *story → style → create* (the "Next: refine story" button exists but the summary editor, style-confirm, and creative-brief review screens are not implemented). The **Creative Brief** TopBar button is also inert. Biggest fidelity gap.
-2. **Generating shimmer (#12).** Replace the plain spinner on generating asset/shot tiles with the purple gradient shimmer seen in the video.
-3. **Prop art in mock (#11).** Props only get images from the real provider; mock shows a placeholder. Source shows a wooden cow + white elephant. Add snipped prop images to `public/assets/props/` for a faithful keyless demo.
+1. ~~**Wizard refine + brief steps (#4, #6, #7, #20).**~~ **DONE (commit ce546d0).** Full flow now matches the video: *story → Take a pass at the summary → visual style → Your visual style → Review your creative brief → create*; the TopBar **Creative Brief** button opens the brief in a modal. Verified end to end in the browser.
+2. **Generating shimmer (#12).** Replace the plain spinner on generating asset/shot tiles with the purple gradient shimmer seen in the video. *(open, cosmetic)*
+3. **Prop art in mock (#11).** Props only get images from the real provider; mock shows a placeholder. Source shows a wooden cow + white elephant. Add snipped prop images to `public/assets/props/` for a faithful keyless demo. *(open)*
 
 ## Out of scope (per spec §10, confirmed against video)
 
