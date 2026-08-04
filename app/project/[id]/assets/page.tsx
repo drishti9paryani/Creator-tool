@@ -123,7 +123,7 @@ export default function AssetDesigner({
         </div>
 
         <Section title="Characters" subtitle="Select any character to see details or iterate on them">
-          <Row cols="grid-cols-5">
+          <Row cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             {characters.map((a) => (
               <AssetCard
                 key={a.id}
@@ -137,7 +137,7 @@ export default function AssetDesigner({
         </Section>
 
         <Section title="Locations" subtitle="Select any location to see details or iterate on them">
-          <Row cols="grid-cols-5">
+          <Row cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             {locations.map((a) => (
               <AssetCard
                 key={a.id}
@@ -152,7 +152,7 @@ export default function AssetDesigner({
         </Section>
 
         <Section title="Props" subtitle="Select any prop to see details or iterate on them">
-          <Row cols="grid-cols-5">
+          <Row cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             {props.map((a) => (
               <AssetCard
                 key={a.id}

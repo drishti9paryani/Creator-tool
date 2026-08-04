@@ -53,9 +53,25 @@ export default function Editor({
                 No footage yet
               </div>
             )}
+
+            {/* Honest label: this is a storyboard still, not rendered footage —
+                no video backend is wired in this build. */}
+            <span className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] text-white/80">
+              Storyboard preview · video rendering unavailable
+            </span>
+
+            {/* Pressing play would imply playback we can't deliver; surface that
+                instead of pretending. */}
+            {playing && firstImage && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm text-white/90">
+                Video preview unavailable in this build
+              </div>
+            )}
+
             <button
               onClick={() => setPlaying((p) => !p)}
               className="absolute bottom-4 left-1/2 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full bg-white text-black"
+              aria-label={playing ? "Stop preview" : "Play preview"}
             >
               {playing ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
             </button>

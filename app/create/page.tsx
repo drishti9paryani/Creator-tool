@@ -88,7 +88,7 @@ export default function CreateWizard() {
           />
         }
       >
-        <div className="mx-auto flex max-w-[640px] justify-center gap-6">
+        <div className="mx-auto flex max-w-[640px] flex-col items-center justify-center gap-6 sm:flex-row">
           {FORMATS.map((f) => (
             <FormatCard
               key={f.id}
@@ -117,7 +117,7 @@ export default function CreateWizard() {
         }
       >
         <div className="mx-auto max-w-[720px]">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {SUGGESTIONS.map((s) => (
               <SuggestionChip
                 key={s.id}
@@ -172,7 +172,7 @@ export default function CreateWizard() {
           </div>
         ) : (
           <div className="animate-fade-up mx-auto max-w-[1180px]">
-            <div className="grid grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
               {draft.outlines.map((o) => (
                 <StoryOutlineCard
                   key={o.id}
@@ -207,7 +207,7 @@ export default function CreateWizard() {
       }
     >
       <div className="scroll-thin mx-auto max-h-[62vh] max-w-[760px] overflow-y-auto pr-2">
-        <div className="grid grid-cols-4 gap-x-6 gap-y-6">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-3 md:grid-cols-4">
           {STYLES.map((s) => (
             <StyleCard
               key={s.id}

@@ -62,9 +62,15 @@ export default function ShotBuilder({
 
   async function generateVideo(target: { sceneId?: string; shotId?: string }) {
     const t = pushToast({ message: "Generating video…", variant: "loading" });
-    await ai.generateVideo(target);
+    const { url } = await ai.generateVideo(target);
     dismissToast(t);
-    pushToast({ message: "Video generated", variant: "success" });
+    // No cheap text-to-video backend is wired, so generateVideo returns no url.
+    // Be honest rather than claim a video was produced.
+    pushToast(
+      url
+        ? { message: "Video generated", variant: "success" }
+        : { message: "Video preview unavailable — video generation isn't wired in this build" }
+    );
   }
 
   async function regenStoryboard(sceneId: string, shotId: string) {
@@ -200,7 +206,7 @@ export default function ShotBuilder({
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-[1fr_300px] gap-6">
+              <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
                 {/* Storyboard preview */}
                 <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-2)]">
                   {shot.status === "generating" ? (

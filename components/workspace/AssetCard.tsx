@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Trash2, ImageOff } from "lucide-react";
 import type { Asset } from "@/lib/ai/types";
 import { Spinner } from "@/components/ui/Loader";
 
@@ -25,17 +25,24 @@ export function AssetCard({
         onClick={onOpen}
         className={`relative ${box} w-full overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-2)]`}
       >
-        {asset.status === "generating" || !asset.image ? (
+        {asset.status === "generating" ? (
+          // Still being generated → spinner.
           <span className="absolute inset-0 flex items-center justify-center">
             <Spinner />
           </span>
-        ) : (
+        ) : asset.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={asset.image}
             alt={asset.name}
             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
           />
+        ) : (
+          // Ready but no image (e.g. mock props without art) → placeholder, not
+          // an endless spinner.
+          <span className="absolute inset-0 flex items-center justify-center text-[var(--color-muted)]">
+            <ImageOff size={22} />
+          </span>
         )}
 
         {onDelete && asset.status === "ready" && (
