@@ -39,9 +39,19 @@ export default function AssetDesigner({
       const t1 = pushToast({ message: "Initializing new project…", variant: "loading" });
       const seeded = await ai.initProject({
         format: project.format,
-        idea: "",
-        story: { id: project.storyId, title: "", description: "", characters: [], settings: [] },
-        style: { id: project.styleId, label: "", thumbnail: "" },
+        idea: project.brief?.summary ?? "",
+        story: {
+          id: project.storyId,
+          title: project.brief?.title ?? "",
+          description: project.brief?.summary ?? "",
+          characters: project.brief?.characters ?? [],
+          settings: project.brief?.settings ?? [],
+        },
+        style: {
+          id: project.styleId,
+          label: project.brief?.styleLabel ?? "",
+          thumbnail: project.brief?.styleThumbnail ?? "",
+        },
       });
       hydrateProject(id, {
         title: seeded.title,
@@ -56,17 +66,17 @@ export default function AssetDesigner({
       });
       const { getCachedAsset, cacheAsset } = useStore.getState();
       for (const a of seeded.assets) {
-        // Reuse a previously generated image for this style+asset if we have
-        // one, so re-creating identical projects doesn't re-bill the image API.
-        const cached = getCachedAsset(project.styleId, a.id);
+        // Reuse an image already generated for THIS project (guards against
+        // the init effect double-firing), but never across different projects.
+        const cached = getCachedAsset(id, a.id);
         if (cached) {
           revealAsset(id, a.id, cached);
           continue;
         }
         await delay(500);
-        const r = await ai.generateAssetImage(a.id);
+        const r = await ai.generateAssetImage(a);
         revealAsset(id, a.id, r.image);
-        if (r.image) cacheAsset(project.styleId, a.id, r.image);
+        if (r.image) cacheAsset(id, a.id, r.image);
       }
       dismissToast(t2);
 

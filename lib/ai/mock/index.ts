@@ -1,5 +1,6 @@
 import type {
   AIProvider,
+  Asset,
   Format,
   FormatOption,
   InitProjectInput,
@@ -60,10 +61,10 @@ export class MockProvider implements AIProvider {
     };
   }
 
-  async generateAssetImage(assetId: string) {
+  async generateAssetImage(asset: Pick<Asset, "id" | "name" | "type" | "description">) {
     await delay(1200);
-    const asset = SAMPLE_ASSETS.find((a) => a.id === assetId);
-    return { id: assetId, image: asset?.image ?? "" };
+    const sample = SAMPLE_ASSETS.find((a) => a.id === asset.id);
+    return { id: asset.id, image: sample?.image ?? "" };
   }
 
   async iterateAsset(assetId: string, _prompt: string) {

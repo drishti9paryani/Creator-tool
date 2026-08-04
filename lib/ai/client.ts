@@ -1,5 +1,6 @@
 import type {
   AIProvider,
+  Asset,
   Format,
   InitProjectInput,
 } from "@/lib/ai/types";
@@ -34,9 +35,9 @@ export const ai = {
   listStyles: () => call<Awaited<ReturnType<AIProvider["listStyles"]>>>("listStyles"),
   initProject: (input: InitProjectInput) =>
     call<Awaited<ReturnType<AIProvider["initProject"]>>>("initProject", [input]),
-  generateAssetImage: (assetId: string) =>
+  generateAssetImage: (asset: Pick<Asset, "id" | "name" | "type" | "description">) =>
     call<Awaited<ReturnType<AIProvider["generateAssetImage"]>>>("generateAssetImage", [
-      assetId,
+      asset,
     ]),
   iterateAsset: (assetId: string, prompt: string) =>
     call<Awaited<ReturnType<AIProvider["iterateAsset"]>>>("iterateAsset", [

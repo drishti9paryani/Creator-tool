@@ -31,8 +31,10 @@ interface WizardDraft {
 interface State {
   draft: WizardDraft;
   projects: Project[];
-  // Persisted cache of generated asset images, keyed by `${styleId}:${assetId}`.
-  // Lets identical assets reuse a prior image instead of re-billing the image API.
+  // Persisted cache of generated asset images, keyed by `${projectId}:${assetId}`.
+  // Scoped per-project so a re-run of a project's init effect (e.g. React
+  // StrictMode double-invoke) doesn't re-bill the image API, while every
+  // distinct new project still always generates fresh art.
   assetCache: Record<string, string>;
 
   // draft actions
@@ -53,9 +55,9 @@ interface State {
   revealAsset: (projectId: string, assetId: string, image: string) => void;
   setAssetImage: (projectId: string, assetId: string, image: string) => void;
   // Asset-image cache helpers.
-  assetCacheKey: (styleId: string, assetId: string) => string;
-  getCachedAsset: (styleId: string, assetId: string) => string | undefined;
-  cacheAsset: (styleId: string, assetId: string, image: string) => void;
+  assetCacheKey: (projectId: string, assetId: string) => string;
+  getCachedAsset: (projectId: string, assetId: string) => string | undefined;
+  cacheAsset: (projectId: string, assetId: string, image: string) => void;
   deleteAsset: (projectId: string, assetId: string) => void;
   addScene: (projectId: string) => void;
   updateScene: (projectId: string, sceneId: string, patch: Partial<Scene>) => void;
@@ -136,12 +138,12 @@ export const useStore = create<State>()(
             assets: p.assets.map((a) => (a.id === assetId ? { ...a, image } : a)),
           })),
         })),
-      assetCacheKey: (styleId, assetId) => `${styleId}:${assetId}`,
-      getCachedAsset: (styleId, assetId) =>
-        get().assetCache[`${styleId}:${assetId}`],
-      cacheAsset: (styleId, assetId, image) =>
+      assetCacheKey: (projectId, assetId) => `${projectId}:${assetId}`,
+      getCachedAsset: (projectId, assetId) =>
+        get().assetCache[`${projectId}:${assetId}`],
+      cacheAsset: (projectId, assetId, image) =>
         set((s) => ({
-          assetCache: { ...s.assetCache, [`${styleId}:${assetId}`]: image },
+          assetCache: { ...s.assetCache, [`${projectId}:${assetId}`]: image },
         })),
       deleteAsset: (projectId, assetId) =>
         set((s) => ({

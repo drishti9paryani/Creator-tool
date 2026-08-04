@@ -92,7 +92,9 @@ export interface AIProvider {
   regenerateOutlines(idea: string, format: Format): Promise<StoryOutline[]>;
   listStyles(): Promise<VisualStyle[]>;
   initProject(input: InitProjectInput): Promise<Project>;
-  generateAssetImage(assetId: string): Promise<{ id: string; image: string }>;
+  generateAssetImage(
+    asset: Pick<Asset, "id" | "name" | "type" | "description">
+  ): Promise<{ id: string; image: string }>;
   iterateAsset(assetId: string, prompt: string): Promise<{ image: string }>;
   generateShotStoryboard(shotId: string): Promise<{ image: string }>;
   generateVideo(target: { sceneId?: string; shotId?: string }): Promise<{ url: string }>;

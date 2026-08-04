@@ -1,5 +1,6 @@
 import type {
   AIProvider,
+  Asset,
   Format,
   FormatOption,
   InitProjectInput,
@@ -29,6 +30,38 @@ import { systemFor } from "@/lib/ai/prompts";
 
 function styleLabel(styleId: string): string {
   return STYLES.find((s) => s.id === styleId)?.label ?? "cinematic";
+}
+
+function slugify(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "asset"
+  );
+}
+
+// Turn "Name: description" outline lines (as produced by the story-outline
+// prompt, see lib/ai/prompts.ts) into Assets so the images generated for a
+// project actually match its brief instead of a fixed demo cast.
+function assetsFromLines(lines: string[], type: Asset["type"]): Asset[] {
+  return lines
+    .map((line) => line.replace(/^[-•]\s*/, "").trim())
+    .filter(Boolean)
+    .map((line) => {
+      const idx = line.indexOf(":");
+      const name = (idx >= 0 ? line.slice(0, idx) : line).trim();
+      const description = idx >= 0 ? line.slice(idx + 1).trim() : "";
+      return {
+        id: slugify(name),
+        type,
+        name,
+        subtitle: type === "character" ? "Character" : "Location",
+        description,
+        status: "generating" as const,
+      };
+    });
 }
 
 export class RealProvider implements AIProvider {
@@ -86,9 +119,16 @@ export class RealProvider implements AIProvider {
     }
   }
 
-  // ── Project assembly (local; no model needed) ────────────────────────────
+  // ── Project assembly (local; derived from the chosen story outline) ──────
   async initProject(input: InitProjectInput): Promise<Project> {
     this.styleId = input.style.id;
+    // The outline's characters/settings (from generateOutlines, see
+    // lib/ai/prompts.ts) drive which assets get generated — falls back to
+    // the bundled demo cast only if the outline came back with none.
+    const assets = [
+      ...assetsFromLines(input.story.characters, "character"),
+      ...assetsFromLines(input.story.settings, "location"),
+    ];
     return {
       id: `proj_${Date.now()}`,
       title: input.story.title || SAMPLE_PROJECT_TITLE,
@@ -97,27 +137,27 @@ export class RealProvider implements AIProvider {
       storyId: input.story.id,
       // Seed assets as "generating"; the assets page reveals each via
       // generateAssetImage below.
-      assets: SAMPLE_ASSETS.map((a) => ({ ...a, image: undefined, status: "generating" as const })),
+      assets: assets.length
+        ? assets
+        : SAMPLE_ASSETS.map((a) => ({ ...a, image: undefined, status: "generating" as const })),
       scenes: SAMPLE_SCENES.map((s) => ({ ...s, shots: [...s.shots] })),
       createdAt: Date.now(),
     };
   }
 
   // ── Image generation → OpenAI ────────────────────────────────────────────
-  async generateAssetImage(assetId: string) {
-    const asset = SAMPLE_ASSETS.find((a) => a.id === assetId);
-    const subject = asset
-      ? `${asset.name}. ${asset.description ?? ""}`
-      : assetId;
+  async generateAssetImage(asset: Pick<Asset, "id" | "name" | "type" | "description">) {
+    const subject = `${asset.name}. ${asset.description ?? ""}`;
     try {
       const image = await generateImage(
         `${styleLabel(this.styleId)} style. ${subject} Single subject, clean background, high detail.`
       );
-      return { id: assetId, image };
+      return { id: asset.id, image };
     } catch (e) {
       console.error("[RealProvider] generateAssetImage failed:", e);
       // Fall back to any known still so the tile resolves instead of spinning.
-      return { id: assetId, image: asset?.image ?? "" };
+      const fallback = SAMPLE_ASSETS.find((a) => a.id === asset.id);
+      return { id: asset.id, image: fallback?.image ?? "" };
     }
   }
 
