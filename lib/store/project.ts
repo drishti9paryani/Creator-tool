@@ -23,6 +23,7 @@ interface WizardDraft {
   idea: string;
   outlines: StoryOutline[];
   selectedStoryId?: string;
+  summary: string; // editable flattened story ("Take a pass at the summary")
   styles: VisualStyle[];
   selectedStyleId?: string;
 }
@@ -39,6 +40,7 @@ interface State {
   setIdea: (idea: string) => void;
   setOutlines: (o: StoryOutline[]) => void;
   selectStory: (id: string) => void;
+  setSummary: (summary: string) => void;
   setStyles: (s: VisualStyle[]) => void;
   selectStyle: (id: string) => void;
   resetDraft: () => void;
@@ -75,6 +77,7 @@ interface State {
 const emptyDraft: WizardDraft = {
   idea: "",
   outlines: [],
+  summary: "",
   styles: [],
 };
 
@@ -101,6 +104,7 @@ export const useStore = create<State>()(
       setOutlines: (outlines) => set((s) => ({ draft: { ...s.draft, outlines } })),
       selectStory: (selectedStoryId) =>
         set((s) => ({ draft: { ...s.draft, selectedStoryId } })),
+      setSummary: (summary) => set((s) => ({ draft: { ...s.draft, summary } })),
       setStyles: (styles) => set((s) => ({ draft: { ...s.draft, styles } })),
       selectStyle: (selectedStyleId) =>
         set((s) => ({ draft: { ...s.draft, selectedStyleId } })),

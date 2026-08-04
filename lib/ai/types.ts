@@ -21,6 +21,7 @@ export interface VisualStyle {
   id: string;
   label: string;
   thumbnail: string; // /assets/styles/*.png
+  description?: string; // shown on the "Your visual style" confirm step
 }
 
 export type AssetType = "character" | "location" | "prop";
@@ -51,12 +52,26 @@ export interface Scene {
   shots: Shot[];
 }
 
+// The wizard's collected brief, persisted on the project so the TopBar
+// "Creative Brief" button can reopen it after creation.
+export interface CreativeBrief {
+  title: string;
+  summary: string; // editable flattened story
+  characters: string[];
+  settings: string[];
+  format: Format;
+  styleId: string;
+  styleLabel: string;
+  styleThumbnail: string;
+}
+
 export interface Project {
   id: string;
   title: string;
   format: Format;
   styleId: string;
   storyId: string;
+  brief?: CreativeBrief;
   assets: Asset[];
   scenes: Scene[];
   createdAt: number;
