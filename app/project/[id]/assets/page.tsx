@@ -54,10 +54,19 @@ export default function AssetDesigner({
         message: "Applying visual style to characters, locations, and props…",
         variant: "loading",
       });
+      const { getCachedAsset, cacheAsset } = useStore.getState();
       for (const a of seeded.assets) {
+        // Reuse a previously generated image for this style+asset if we have
+        // one, so re-creating identical projects doesn't re-bill the image API.
+        const cached = getCachedAsset(project.styleId, a.id);
+        if (cached) {
+          revealAsset(id, a.id, cached);
+          continue;
+        }
         await delay(500);
         const r = await ai.generateAssetImage(a.id);
         revealAsset(id, a.id, r.image);
+        if (r.image) cacheAsset(project.styleId, a.id, r.image);
       }
       dismissToast(t2);
 

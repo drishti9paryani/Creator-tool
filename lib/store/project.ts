@@ -29,6 +29,9 @@ interface WizardDraft {
 interface State {
   draft: WizardDraft;
   projects: Project[];
+  // Persisted cache of generated asset images, keyed by `${styleId}:${assetId}`.
+  // Lets identical assets reuse a prior image instead of re-billing the image API.
+  assetCache: Record<string, string>;
 
   // draft actions
   setFormat: (f: Format) => void;
@@ -46,6 +49,10 @@ interface State {
   updateProjectTitle: (id: string, title: string) => void;
   revealAsset: (projectId: string, assetId: string, image: string) => void;
   setAssetImage: (projectId: string, assetId: string, image: string) => void;
+  // Asset-image cache helpers.
+  assetCacheKey: (styleId: string, assetId: string) => string;
+  getCachedAsset: (styleId: string, assetId: string) => string | undefined;
+  cacheAsset: (styleId: string, assetId: string, image: string) => void;
   deleteAsset: (projectId: string, assetId: string) => void;
   addScene: (projectId: string) => void;
   updateScene: (projectId: string, sceneId: string, patch: Partial<Scene>) => void;
@@ -85,6 +92,7 @@ export const useStore = create<State>()(
     (set, get) => ({
       draft: { ...emptyDraft },
       projects: [],
+      assetCache: {},
       toasts: [],
 
       setFormat: (format) => set((s) => ({ draft: { ...s.draft, format } })),
@@ -122,6 +130,13 @@ export const useStore = create<State>()(
             ...p,
             assets: p.assets.map((a) => (a.id === assetId ? { ...a, image } : a)),
           })),
+        })),
+      assetCacheKey: (styleId, assetId) => `${styleId}:${assetId}`,
+      getCachedAsset: (styleId, assetId) =>
+        get().assetCache[`${styleId}:${assetId}`],
+      cacheAsset: (styleId, assetId, image) =>
+        set((s) => ({
+          assetCache: { ...s.assetCache, [`${styleId}:${assetId}`]: image },
         })),
       deleteAsset: (projectId, assetId) =>
         set((s) => ({
@@ -201,7 +216,8 @@ export const useStore = create<State>()(
     {
       name: "prototype-studio",
       // Persist only durable data; toasts + wizard draft stay in-session.
-      partialize: (s) => ({ projects: s.projects }) as unknown as State,
+      partialize: (s) =>
+        ({ projects: s.projects, assetCache: s.assetCache }) as unknown as State,
     }
   )
 );
