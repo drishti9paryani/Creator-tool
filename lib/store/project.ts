@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { idbStorage } from "@/lib/store/idbStorage";
 import type {
   Format,
   Project,
@@ -215,6 +216,9 @@ export const useStore = create<State>()(
     }),
     {
       name: "prototype-studio",
+      // IndexedDB (not localStorage): persisted asset images are base64 data
+      // URLs that exceed localStorage's ~5MB quota.
+      storage: createJSONStorage(() => idbStorage),
       // Persist only durable data; toasts + wizard draft stay in-session.
       partialize: (s) =>
         ({ projects: s.projects, assetCache: s.assetCache }) as unknown as State,
