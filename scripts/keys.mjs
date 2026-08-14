@@ -76,6 +76,10 @@ function askHidden(question) {
       if (!muted && original) return original(str);
       if (str.includes("\n")) process.stdout.write("\n");
     };
+    // 'close' fires without an answer when stdin is at EOF (piped, redirected,
+    // or run by a non-interactive agent). Without this the promise never
+    // settles and the process hangs until something kills it.
+    rl.on("close", () => resolve(""));
     rl.question(question, (answer) => {
       muted = false;
       rl.close();
@@ -88,6 +92,7 @@ function askHidden(question) {
 function ask(question) {
   return new Promise((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.on("close", () => resolve(""));
     rl.question(question, (a) => {
       rl.close();
       resolve(a.trim());
@@ -178,7 +183,35 @@ async function main() {
   status();
   if (args.has("--status")) return;
 
+  // Refuse to prompt where nobody can type: an agent, a pipe, a CI job. The
+  // prompts would all read EOF and silently record nothing.
+  if (!process.stdin.isTTY) {
+    console.log(
+      "  This needs an interactive terminal — stdin isn't a TTY here.\n" +
+        "  Open Windows Terminal or PowerShell yourself and run:\n\n" +
+        (args.has("--local")
+          ? "    cd C:\\Users\\Admin\\CreatorStudio\n    npm run keys -- --local\n\n"
+          : "    keys\n\n")
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   const local = args.has("--local");
+
+  // --local writes into the CURRENT directory. Run from the wrong folder via
+  // the global `keys` command, that silently creates a stray .env.local
+  // somewhere it will never be read.
+  if (local && !existsSync(join(process.cwd(), "package.json"))) {
+    console.log(
+      `  --local writes to ${projectEnv}\n` +
+        "  but there's no package.json here, so this doesn't look like a project.\n" +
+        "  cd into the project first, or drop --local to set the keys machine-wide.\n"
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   console.log(
     local
       ? "  Writing to this project's .env.local.\n"
