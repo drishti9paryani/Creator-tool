@@ -33,13 +33,32 @@ header), so a tester is never guessing.
 
 ### Switching to live AI
 
-1. Open `.env.local` and paste your keys:
-   ```
-   AI_PROVIDER=real
-   OPENCODE_API_KEY=...
-   OPENAI_API_KEY=...
-   ```
-2. Restart the dev server.
+```bash
+keys              # set them once, for every project on this PC
+keys --status     # what's set right now (masked)
+keys --clear      # remove them
+```
+
+Run it, paste each key when prompted (input is hidden), say yes to switching
+this project to live AI, then restart the dev server **in a new terminal**.
+
+`keys` writes to your Windows **user environment**, not to a file in any repo —
+Node reads `process.env` before any `.env`, so every project picks the keys up
+automatically and there's no dotfile to leak into a commit or a screenshot. The
+tool never prints a key back; `--status` shows only a masked fingerprint
+(`sk-ab…9f21`) so you can tell *which* key is set without exposing it.
+
+`keys --local` writes to this project's `.env.local` instead, if you want the
+keys scoped to one repo. That file is git-ignored.
+
+Manual equivalent, if you prefer:
+
+```
+# .env.local
+AI_PROVIDER=real
+OPENCODE_API_KEY=...
+OPENAI_API_KEY=...
+```
 
 `.env.local` is git-ignored — keys never reach the browser or git. All provider
 calls run server-side in `app/api/ai/`. On boot, a health check logs each
