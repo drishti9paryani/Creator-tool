@@ -5,6 +5,8 @@ import { Play, Pause, Scissors, Download, Film, SkipBack } from "lucide-react";
 import { useStore } from "@/lib/store/project";
 import { CommandBar } from "@/components/workspace/CommandBar";
 import { downloadStoryboard } from "@/lib/export";
+import { ProjectLoading, ProjectMissing } from "@/components/workspace/ProjectGate";
+import { useHydrated } from "@/lib/store/useHydrated";
 
 const SECONDS_PER_CLIP = 2.5;
 
@@ -23,6 +25,7 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
   const [playing, setPlaying] = useState(false);
   const [index, setIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hydrated = useHydrated();
 
   const clips = useMemo(
     () =>
@@ -64,19 +67,9 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
     if (index >= clips.length) setIndex(Math.max(0, clips.length - 1));
   }, [clips.length, index]);
 
-  if (!project) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-[var(--color-muted)]">
-        <p>This project doesn&apos;t exist on this device.</p>
-        <a
-          href="/"
-          className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90"
-        >
-          Back to projects
-        </a>
-      </div>
-    );
-  }
+  // See ProjectGate: IndexedDB resolves asynchronously, so this order matters.
+  if (!hydrated) return <ProjectLoading />;
+  if (!project) return <ProjectMissing />;
 
   const current = clips[index];
   const totalSeconds = (clips.length * SECONDS_PER_CLIP).toFixed(1);

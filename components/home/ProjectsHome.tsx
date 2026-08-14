@@ -7,6 +7,7 @@ import { Plus, Film, Trash2, Sparkles, Info, X } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store/project";
+import { useHydrated } from "@/lib/store/useHydrated";
 import { STYLES } from "@/data/styles";
 
 const SEEN_INTRO_KEY = "prototype-studio:intro-dismissed";
@@ -17,14 +18,15 @@ export function ProjectsHome({ liveMode }: { liveMode: boolean }) {
   const resetDraft = useStore((s) => s.resetDraft);
   const deleteProject = useStore((s) => s.deleteProject);
 
-  const [hydrated, setHydrated] = useState(false);
+  // Projects live in IndexedDB, so the first client render has none. A mount
+  // effect fires BEFORE that async read resolves, so gating on mount showed a
+  // returning tester "Start your first project" — all their work apparently
+  // gone — before it popped back in. Gate on real store hydration instead.
+  const hydrated = useHydrated();
   const [showIntro, setShowIntro] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  // Projects live in IndexedDB, so the first client render has none. Waiting
-  // for hydration stops the empty state from flashing on every load.
   useEffect(() => {
-    setHydrated(true);
     setShowIntro(localStorage.getItem(SEEN_INTRO_KEY) !== "1");
   }, []);
 

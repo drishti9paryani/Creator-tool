@@ -12,6 +12,8 @@ import { CommandBar } from "@/components/workspace/CommandBar";
 import { EditableTitle } from "@/components/ui/EditableTitle";
 import { Button } from "@/components/ui/Button";
 import { NewAssetDialog } from "@/components/workspace/NewAssetDialog";
+import { ProjectLoading, ProjectMissing } from "@/components/workspace/ProjectGate";
+import { useHydrated } from "@/lib/store/useHydrated";
 import type { Asset, AssetType } from "@/lib/ai/types";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -43,6 +45,7 @@ export default function AssetDesigner({
   const [initState, setInitState] = useState<"idle" | "running" | "failed">("idle");
   const [addingType, setAddingType] = useState<AssetType | null>(null);
   const ran = useRef(false);
+  const hydrated = useHydrated();
 
   const styleId = project?.styleId ?? "";
 
@@ -126,6 +129,50 @@ export default function AssetDesigner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
 
+  /**
+   * Finish art for assets left mid-generation. If init dies (or the tab is
+   * refreshed) partway through the reveal loop, the remaining tiles keep
+   * status "generating" and spin forever — the repair banner used to only
+   * cover the assets-are-empty case, which this isn't.
+   */
+  const resumeArt = useCallback(async () => {
+    const current = useStore.getState().projects.find((p) => p.id === id);
+    if (!current) return;
+    const pending = current.assets.filter((a) => a.status === "generating");
+    if (pending.length === 0) return;
+
+    setInitState("running");
+    const t = pushToast({
+      message: `Finishing art for ${pending.length} asset${pending.length === 1 ? "" : "s"}…`,
+      variant: "loading",
+    });
+    try {
+      for (const a of pending) {
+        const r = await ai.generateAssetImage({
+          id: a.id,
+          projectId: id,
+          name: a.name,
+          type: a.type,
+          description: a.description,
+          styleId: current.styleId,
+        });
+        revealAsset(id, a.id, r.image);
+      }
+      dismissToast(t);
+      pushToast({ message: "All assets ready", variant: "success" });
+      setInitState("idle");
+    } catch (e) {
+      dismissToast(t);
+      setInitState("failed");
+      pushToast({
+        message: "Couldn't finish generating art",
+        detail: e instanceof Error ? e.message : undefined,
+        variant: "error",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   // ── Add an asset by hand ────────────────────────────────────────────────
   async function createAsset(type: AssetType, name: string, description: string) {
     const assetId = `${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -186,9 +233,10 @@ export default function AssetDesigner({
     }
   }
 
-  if (!project) {
-    return <ProjectMissing />;
-  }
+  // Order matters: the store loads from IndexedDB asynchronously, so "no
+  // project" is meaningless until hydration finishes.
+  if (!hydrated) return <ProjectLoading />;
+  if (!project) return <ProjectMissing />;
 
   // Detail / iterate view
   if (selectedId) {
@@ -221,6 +269,7 @@ export default function AssetDesigner({
   const locations = byType("location");
   const props = byType("prop");
   const empty = project.assets.length === 0;
+  const stuck = project.assets.filter((a) => a.status === "generating").length;
 
   return (
     <>
@@ -238,22 +287,30 @@ export default function AssetDesigner({
           </p>
         </div>
 
-        {/* A project that never finished initialising is recoverable, not dead. */}
-        {empty && initState !== "running" && (
+        {/* A project that never finished initialising is recoverable, not dead.
+            Two distinct broken states: nothing was built at all, or the art
+            loop stopped partway and tiles are stuck spinning. */}
+        {initState !== "running" && (empty || stuck > 0) && (
           <div className="mb-8 flex flex-col items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-950/20 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-400" />
               <div>
-                <p className="text-sm font-semibold">This project has no assets yet</p>
+                <p className="text-sm font-semibold">
+                  {empty
+                    ? "This project has no assets yet"
+                    : `${stuck} asset${stuck === 1 ? "" : "s"} didn't finish generating`}
+                </p>
                 <p className="mt-0.5 text-sm text-[var(--color-muted)]">
                   {initState === "failed"
                     ? "Setup didn't finish. You can run it again — nothing else is lost."
-                    : "Setup was interrupted, probably by a refresh. Run it again to build your cast."}
+                    : empty
+                      ? "Setup was interrupted, probably by a refresh. Run it again to build your cast."
+                      : "Their tiles will keep spinning until you finish them. Everything else is fine."}
                 </p>
               </div>
             </div>
-            <Button onClick={runInit}>
-              <RefreshCw size={14} /> Set up project
+            <Button onClick={empty ? runInit : resumeArt}>
+              <RefreshCw size={14} /> {empty ? "Set up project" : "Finish generating"}
             </Button>
           </div>
         )}
@@ -333,26 +390,6 @@ export default function AssetDesigner({
 
       <CommandBar placeholder="Ask for a change — e.g. make the palette colder…" />
     </>
-  );
-}
-
-function ProjectMissing() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-      <p className="text-[var(--color-muted)]">
-        This project doesn&apos;t exist on this device.
-      </p>
-      <p className="max-w-[420px] text-sm text-[var(--color-muted-2)]">
-        Projects are stored in your browser, so they don&apos;t follow you between
-        devices or survive clearing site data.
-      </p>
-      <a
-        href="/"
-        className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90"
-      >
-        Back to projects
-      </a>
-    </div>
   );
 }
 

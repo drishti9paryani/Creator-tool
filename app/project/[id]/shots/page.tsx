@@ -18,6 +18,8 @@ import { CommandBar } from "@/components/workspace/CommandBar";
 import { EditableTitle } from "@/components/ui/EditableTitle";
 import { Callout } from "@/components/ui/Tooltip";
 import { Spinner } from "@/components/ui/Loader";
+import { ProjectLoading, ProjectMissing } from "@/components/workspace/ProjectGate";
+import { useHydrated } from "@/lib/store/useHydrated";
 import type { Project, Scene, Shot } from "@/lib/ai/types";
 
 type Selection =
@@ -47,20 +49,13 @@ export default function ShotBuilder({
   const [collapsed, setCollapsed] = useState(false);
   const [showHint, setShowHint] = useState(true);
   const [writing, setWriting] = useState(false);
+  const hydrated = useHydrated();
 
-  if (!project) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-[var(--color-muted)]">
-        <p>This project doesn&apos;t exist on this device.</p>
-        <a
-          href="/"
-          className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90"
-        >
-          Back to projects
-        </a>
-      </div>
-    );
-  }
+  // The store loads from IndexedDB asynchronously — "no project" is meaningless
+  // until hydration finishes, and showing the missing-project screen first
+  // tells a tester their work is gone.
+  if (!hydrated) return <ProjectLoading />;
+  if (!project) return <ProjectMissing />;
 
   const scene =
     sel.kind !== "none" ? project.scenes.find((s) => s.id === sel.sceneId) : undefined;
