@@ -1,28 +1,40 @@
 import type {
   AIProvider,
-  Asset,
+  AssetImageInput,
   Format,
   FormatOption,
   InitProjectInput,
+  IterateAssetInput,
   Project,
+  ScreenplayInput,
   StoryOutline,
+  StoryboardInput,
   VisualStyle,
 } from "@/lib/ai/types";
 import { FORMATS } from "@/data/formats";
 import { SUGGESTIONS } from "@/data/suggestions";
-import { OUTLINE_TRIO_A, OUTLINE_TRIO_B } from "@/data/outlines";
 import { STYLES } from "@/data/styles";
 import {
-  SAMPLE_ASSETS,
-  SAMPLE_PROJECT_TITLE,
-  SAMPLE_SCENES,
-} from "@/data/sampleProject";
+  deriveAssets,
+  deriveOutlines,
+  deriveScenes,
+  deriveTitle,
+} from "@/lib/ai/story";
+import { placeholderArt, placeholderFrame } from "@/lib/ai/placeholder";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// MockProvider — returns canned data after realistic delays. Swap for a real
-// backend (Gemini, etc.) by implementing AIProvider and selecting it in
-// getProvider(); the app never changes.
+// MockProvider — keyless demo mode.
+//
+// This used to return the same canned "Silent Sunbearer" story for every input:
+// generateOutlines ignored the idea entirely and initProject always seeded
+// Krishna's cast. Fine for reproducing a screen recording, fatal for a
+// prototype real people test — everyone typed their own idea, got someone
+// else's story, and concluded the product was fake.
+//
+// It now derives everything from the typed idea via lib/ai/story.ts: same idea
+// in, same story out (demos stay reproducible), different idea in, genuinely
+// different story out. No key, no cost, no network.
 export class MockProvider implements AIProvider {
   async listFormats(): Promise<FormatOption[]> {
     return FORMATS;
@@ -32,59 +44,75 @@ export class MockProvider implements AIProvider {
     return SUGGESTIONS;
   }
 
-  async generateOutlines(_idea: string, _format: Format): Promise<StoryOutline[]> {
-    await delay(2600);
-    return OUTLINE_TRIO_A;
-  }
-
-  async regenerateOutlines(_idea: string, _format: Format): Promise<StoryOutline[]> {
-    await delay(2400);
-    return OUTLINE_TRIO_B;
-  }
-
   async listStyles(): Promise<VisualStyle[]> {
     return STYLES;
+  }
+
+  async generateOutlines(idea: string, format: Format): Promise<StoryOutline[]> {
+    await delay(1800);
+    return deriveOutlines(idea, format, 0);
+  }
+
+  async regenerateOutlines(idea: string, format: Format): Promise<StoryOutline[]> {
+    await delay(1600);
+    // variant 1 → a different trio for the same idea.
+    return deriveOutlines(idea, format, 1);
   }
 
   async initProject(input: InitProjectInput): Promise<Project> {
     await delay(400);
     return {
       id: `proj_${Date.now()}`,
-      title: SAMPLE_PROJECT_TITLE,
+      title: deriveTitle(input.story, input.idea),
       format: input.format,
       styleId: input.style.id,
       storyId: input.story.id,
-      // Seed assets as "generating" so the UI can reveal them progressively.
-      assets: SAMPLE_ASSETS.map((a) => ({ ...a, status: "generating" as const })),
-      scenes: SAMPLE_SCENES.map((s) => ({ ...s, shots: [...s.shots] })),
+      assets: deriveAssets(input.story),
+      scenes: deriveScenes(input.story, input.format),
       createdAt: Date.now(),
     };
   }
 
-  async generateAssetImage(asset: Pick<Asset, "id" | "name" | "type" | "description">) {
+  async generateAssetImage(input: AssetImageInput) {
+    await delay(900);
+    return {
+      id: input.id,
+      image: placeholderArt(input.name, input.type, input.styleId),
+    };
+  }
+
+  async iterateAsset(input: IterateAssetInput) {
     await delay(1200);
-    const sample = SAMPLE_ASSETS.find((a) => a.id === asset.id);
-    return { id: asset.id, image: sample?.image ?? "" };
+    // Fold the prompt into the seed so an iteration visibly changes the art.
+    return {
+      image: placeholderArt(`${input.name} ${input.prompt}`, input.type, input.styleId),
+    };
   }
 
-  async iterateAsset(assetId: string, _prompt: string) {
-    await delay(1600);
-    const asset = SAMPLE_ASSETS.find((a) => a.id === assetId);
-    return { image: asset?.image ?? "" };
+  async generateShotStoryboard(input: StoryboardInput) {
+    await delay(1400);
+    return { image: placeholderFrame(input.shotTitle, input.styleId) };
   }
 
-  async generateShotStoryboard(_shotId: string) {
-    await delay(1800);
-    return { image: "/assets/locations/govardhan-hill.png" };
+  async generateScreenplay(input: ScreenplayInput) {
+    await delay(800);
+    const beat = input.sceneDescription || input.storySummary;
+    return {
+      text:
+        `${input.shotTitle.toUpperCase()}\n\n${beat}\n\n` +
+        (input.format === "short"
+          ? "Hold two beats, then cut. No dialogue — the image carries it."
+          : "Let the moment breathe before the cut. Keep the camera still; the performance moves."),
+    };
   }
 
   async generateVideo(_target: { sceneId?: string; shotId?: string }) {
-    await delay(2600);
+    await delay(1200);
     return { url: "" };
   }
 
   async runCommand(prompt: string) {
-    await delay(900);
+    await delay(700);
     return { message: `Applied: "${prompt}"` };
   }
 }

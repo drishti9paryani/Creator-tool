@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUp, FileText } from "lucide-react";
+import { ArrowUp, FileText, RefreshCw, AlertTriangle } from "lucide-react";
 import { WizardShell } from "@/components/wizard/WizardShell";
 import { WizardFooter } from "@/components/wizard/WizardFooter";
 import { FormatCard } from "@/components/wizard/FormatCard";
@@ -23,6 +23,8 @@ import { STYLES } from "@/data/styles";
 // 5 your visual style (confirm) · 6 review creative brief
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
+const MIN_IDEA_LENGTH = 8;
+
 export default function CreateWizard() {
   const router = useRouter();
   const draft = useStore((s) => s.draft);
@@ -39,6 +41,7 @@ export default function CreateWizard() {
 
   const [step, setStep] = useState<Step>(0);
   const [loadingOutlines, setLoadingOutlines] = useState(false);
+  const [outlineError, setOutlineError] = useState<string | null>(null);
 
   const selectedOutline =
     draft.outlines.find((o) => o.id === draft.selectedStoryId) ?? draft.outlines[0];
@@ -47,7 +50,7 @@ export default function CreateWizard() {
 
   // Fetch outlines when entering step 2 without any loaded yet.
   useEffect(() => {
-    if (step === 2 && draft.outlines.length === 0 && !loadingOutlines) {
+    if (step === 2 && draft.outlines.length === 0 && !loadingOutlines && !outlineError) {
       void loadOutlines(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,13 +72,27 @@ export default function CreateWizard() {
 
   async function loadOutlines(regen: boolean) {
     setLoadingOutlines(true);
+    setOutlineError(null);
     setOutlines([]);
     selectStory("");
-    const res = regen
-      ? await ai.regenerateOutlines(draft.idea, draft.format ?? "video")
-      : await ai.generateOutlines(draft.idea, draft.format ?? "video");
-    setOutlines(res);
-    setLoadingOutlines(false);
+    try {
+      const res = regen
+        ? await ai.regenerateOutlines(draft.idea, draft.format ?? "video")
+        : await ai.generateOutlines(draft.idea, draft.format ?? "video");
+      setOutlines(res);
+      // Pre-select the first option so the flow can never dead-end on a user
+      // who skipped this step (the old build let them reach "Create project"
+      // with nothing selected, where the button silently did nothing).
+      if (res[0]) selectStory(res[0].id);
+    } catch (e) {
+      // Without this catch, any server error left the spinner running forever —
+      // the worst possible failure to hand a tester.
+      setOutlineError(
+        e instanceof Error ? e.message : "Something went wrong generating stories."
+      );
+    } finally {
+      setLoadingOutlines(false);
+    }
   }
 
   function finish() {
@@ -89,7 +106,7 @@ export default function CreateWizard() {
     const id = `proj_${Date.now()}`;
     addProject({
       id,
-      title: "Title of the project",
+      title: brief.title || "Untitled Project",
       format: draft.format ?? "video",
       styleId: selectedStyle.id,
       storyId: selectedOutline.id,
@@ -104,14 +121,17 @@ export default function CreateWizard() {
   // ---- Step 0: Format ----
   if (step === 0) {
     return (
-      <WizardShell heading="Choose your format" subheading="Specify aspect ratio"
+      <WizardShell
+        step={0}
+        heading="Choose your format"
+        subheading="Specify aspect ratio"
         footer={
           <WizardFooter
             showPrev={false}
             nextLabel="Next: describe story"
             nextDisabled={!draft.format}
+            nextHint={!draft.format ? "Pick a format to continue" : undefined}
             onNext={() => setStep(1)}
-            onSkip={() => setStep(1)}
           />
         }
       >
@@ -131,15 +151,21 @@ export default function CreateWizard() {
 
   // ---- Step 1: Describe ----
   if (step === 1) {
+    const ideaReady = draft.idea.trim().length >= MIN_IDEA_LENGTH;
     return (
-      <WizardShell heading="Describe your story idea"
+      <WizardShell
+        step={1}
+        heading="Describe your story idea"
         subheading="Choose a suggestion or describe your idea"
         footer={
           <WizardFooter
             nextLabel="Next: choose story outline"
+            nextDisabled={!ideaReady}
+            nextHint={
+              ideaReady ? undefined : "Write a sentence or pick a suggestion above"
+            }
             onPrev={() => setStep(0)}
             onNext={() => setStep(2)}
-            onSkip={() => setStep(2)}
           />
         }
       >
@@ -159,13 +185,31 @@ export default function CreateWizard() {
             <textarea
               value={draft.idea}
               onChange={(e) => setIdea(e.target.value)}
-              placeholder="Describe your story idea…"
-              className="scroll-thin h-32 w-full resize-none rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-panel)]/40 p-4 text-sm outline-none placeholder:text-[var(--color-muted-2)] focus:border-[var(--color-border)]"
+              onKeyDown={(e) => {
+                // Enter submits, Shift+Enter makes a new line.
+                if (e.key === "Enter" && !e.shiftKey && ideaReady) {
+                  e.preventDefault();
+                  setStep(2);
+                }
+              }}
+              autoFocus
+              maxLength={1200}
+              placeholder="e.g. A retired postman discovers the letters he never delivered…"
+              className="scroll-thin h-32 w-full resize-none rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-panel)]/40 p-4 pr-12 text-sm outline-none placeholder:text-[var(--color-muted-2)] focus:border-[var(--color-border)]"
             />
-            <span className="absolute bottom-3 right-3 text-[var(--color-muted)]">
-              <ArrowUp size={16} />
-            </span>
+            <button
+              onClick={() => ideaReady && setStep(2)}
+              disabled={!ideaReady}
+              aria-label="Continue"
+              className="absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-panel-2)] text-[var(--color-muted)] transition enabled:hover:text-[var(--color-text)] disabled:opacity-40"
+            >
+              <ArrowUp size={15} />
+            </button>
           </div>
+          <p className="mt-2 flex justify-between text-xs text-[var(--color-muted-2)]">
+            <span>Press Enter to continue · Shift+Enter for a new line</span>
+            <span>{draft.idea.trim().length}/1200</span>
+          </p>
         </div>
       </WizardShell>
     );
@@ -174,7 +218,9 @@ export default function CreateWizard() {
   // ---- Step 2: Select story ----
   if (step === 2) {
     return (
-      <WizardShell heading="Select a story"
+      <WizardShell
+        step={2}
+        heading="Select a story"
         subheading={
           <Button variant="pill" className="mt-1" onClick={() => setStep(3)}>
             <FileText size={14} /> Use my story without editing it
@@ -184,9 +230,11 @@ export default function CreateWizard() {
           <WizardFooter
             nextLabel="Next: refine story"
             nextDisabled={!draft.selectedStoryId}
+            nextHint={
+              draft.selectedStoryId ? undefined : "Choose one of the three stories"
+            }
             onPrev={() => setStep(1)}
             onNext={() => setStep(3)}
-            onSkip={() => setStep(3)}
           />
         }
       >
@@ -196,6 +244,20 @@ export default function CreateWizard() {
             <p className="mt-6 text-sm text-[var(--color-muted)]">
               Generating outline options…
             </p>
+          </div>
+        ) : outlineError ? (
+          <div className="animate-fade-up mx-auto flex max-w-[460px] flex-col items-center rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-panel)]/40 p-8 text-center">
+            <AlertTriangle size={26} className="text-amber-400" />
+            <h3 className="mt-4 font-semibold">Couldn&apos;t generate stories</h3>
+            <p className="mt-2 text-sm text-[var(--color-muted)]">{outlineError}</p>
+            <div className="mt-5 flex gap-3">
+              <Button onClick={() => loadOutlines(false)}>
+                <RefreshCw size={14} /> Try again
+              </Button>
+              <Button variant="ghost" onClick={() => setStep(1)}>
+                Edit my idea
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="animate-fade-up mx-auto max-w-[1180px]">
@@ -211,7 +273,7 @@ export default function CreateWizard() {
             </div>
             <div className="mt-5 flex justify-center">
               <Button variant="ghost" onClick={() => loadOutlines(true)}>
-                ↻ Regenerate options
+                <RefreshCw size={14} /> Regenerate options
               </Button>
             </div>
           </div>
@@ -223,14 +285,15 @@ export default function CreateWizard() {
   // ---- Step 3: Take a pass at the summary ----
   if (step === 3) {
     return (
-      <WizardShell heading="Take a pass at the summary"
+      <WizardShell
+        step={3}
+        heading="Take a pass at the summary"
         subheading="You can edit this later in your project"
         footer={
           <WizardFooter
             nextLabel="Next: choose visual style"
             onPrev={() => setStep(2)}
             onNext={() => setStep(4)}
-            onSkip={() => setStep(4)}
           />
         }
       >
@@ -241,6 +304,9 @@ export default function CreateWizard() {
             placeholder="Your story summary…"
             className="scroll-thin h-[320px] w-full resize-none rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-panel)]/40 p-5 text-sm leading-relaxed outline-none placeholder:text-[var(--color-muted-2)] focus:border-[var(--color-border)]"
           />
+          <p className="mt-2 text-xs text-[var(--color-muted-2)]">
+            This summary drives your characters, locations and scenes.
+          </p>
         </div>
       </WizardShell>
     );
@@ -249,14 +315,17 @@ export default function CreateWizard() {
   // ---- Step 4: Establish your visual style ----
   if (step === 4) {
     return (
-      <WizardShell heading="Establish your visual style"
+      <WizardShell
+        step={4}
+        heading="Establish your visual style"
+        subheading="Every character, location and storyboard frame inherits this look"
         footer={
           <WizardFooter
             nextLabel="Next: preview style"
             nextDisabled={!draft.selectedStyleId}
+            nextHint={draft.selectedStyleId ? undefined : "Pick a style to continue"}
             onPrev={() => setStep(3)}
             onNext={() => setStep(5)}
-            onSkip={() => setStep(5)}
           />
         }
       >
@@ -279,14 +348,15 @@ export default function CreateWizard() {
   // ---- Step 5: Your visual style (confirm) ----
   if (step === 5) {
     return (
-      <WizardShell heading="Your visual style"
+      <WizardShell
+        step={5}
+        heading="Your visual style"
         subheading="A preview of the style applied to your project"
         footer={
           <WizardFooter
             nextLabel="Next: review brief"
             onPrev={() => setStep(4)}
             onNext={() => setStep(6)}
-            onSkip={() => setStep(6)}
           />
         }
       >
@@ -310,14 +380,17 @@ export default function CreateWizard() {
 
   // ---- Step 6: Review your creative brief ----
   return (
-    <WizardShell heading="Review your creative brief"
+    <WizardShell
+      step={6}
+      heading="Review your creative brief"
       subheading="You can access this on the project page later as well"
       footer={
         <WizardFooter
           nextLabel="Create project"
+          nextDisabled={!selectedOutline}
+          nextHint={selectedOutline ? undefined : "Go back and choose a story first"}
           onPrev={() => setStep(5)}
           onNext={finish}
-          onSkip={finish}
         />
       }
     >

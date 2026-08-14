@@ -1,33 +1,41 @@
 "use client";
 
-import { useState } from "react";
-import {
-  ArrowLeft,
-  ChevronUp,
-  Upload,
-  Sparkles,
-  Pencil,
-  Download,
-  Wand2,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, Sparkles, Wand2 } from "lucide-react";
 import type { Asset } from "@/lib/ai/types";
+import { Spinner } from "@/components/ui/Loader";
+import { Button } from "@/components/ui/Button";
 
-// The asset detail / iterate screen (Back + grouped Asset List on the left,
-// description / voice / visual on the right).
+// The asset detail / iterate screen: grouped asset list on the left, the
+// selected asset's description, voice and visual on the right.
+//
+// Removed from the original: a Download button, an "Upload Reference Image"
+// button, and a two-up image grid that rendered the same picture twice. None of
+// them did anything; each one was a bug report waiting to be filed.
 export function AssetDetail({
   assets,
   selectedId,
   onSelect,
   onBack,
   onUpdateDescription,
+  onUpdateVoice,
+  onIterate,
 }: {
   assets: Asset[];
   selectedId: string;
   onSelect: (id: string) => void;
   onBack: () => void;
   onUpdateDescription: (id: string, description: string) => void;
+  onUpdateVoice: (id: string, voice: string) => void;
+  onIterate: (id: string, prompt: string) => void | Promise<void>;
 }) {
   const selected = assets.find((a) => a.id === selectedId);
+  const [editPrompt, setEditPrompt] = useState("");
+
+  // Clear the pending edit when switching assets, so a prompt typed for one
+  // character can't be applied to another.
+  useEffect(() => setEditPrompt(""), [selectedId]);
+
   const groups: { key: Asset["type"]; label: string }[] = [
     { key: "character", label: "Characters" },
     { key: "location", label: "Locations" },
@@ -35,14 +43,14 @@ export function AssetDetail({
   ];
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-col lg:flex-row">
       {/* Asset list */}
-      <aside className="w-[340px] shrink-0 overflow-y-auto scroll-thin px-6 py-5">
+      <aside className="shrink-0 overflow-y-auto scroll-thin border-b border-[var(--color-border-soft)] px-5 py-5 lg:w-[320px] lg:border-b-0 lg:border-r">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]"
+          className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)] hover:text-white"
         >
-          <ArrowLeft size={16} /> Back
+          <ArrowLeft size={16} /> Back to all assets
         </button>
         <h2 className="mt-6 text-lg font-bold">Asset List</h2>
 
@@ -51,10 +59,7 @@ export function AssetDetail({
           if (items.length === 0) return null;
           return (
             <div key={g.key} className="mt-5">
-              <div className="flex items-center justify-between text-sm text-[var(--color-muted)]">
-                <span>{g.label}</span>
-                <ChevronUp size={15} />
-              </div>
+              <p className="text-sm text-[var(--color-muted)]">{g.label}</p>
               <div className="mt-2 space-y-1">
                 {items.map((a) => (
                   <button
@@ -72,8 +77,8 @@ export function AssetDetail({
                         <img src={a.image} alt="" className="h-full w-full object-cover" />
                       )}
                     </span>
-                    <span>
-                      <span className="block text-[13px] font-semibold uppercase">
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold uppercase">
                         {a.name}
                       </span>
                       <span className="block text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
@@ -90,74 +95,100 @@ export function AssetDetail({
 
       {/* Detail panel */}
       {selected && (
-        <section className="flex-1 overflow-y-auto scroll-thin px-10 py-6">
+        <section className="flex-1 overflow-y-auto scroll-thin px-5 py-6 pb-32 sm:px-10">
           <div className="mx-auto max-w-[760px]">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
-                  {selected.subtitle}
-                </p>
-                <h1 className="mt-1 text-2xl font-bold uppercase">{selected.name}</h1>
+            <p className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
+              {selected.subtitle}
+            </p>
+            <h1 className="mt-1 text-2xl font-bold uppercase">{selected.name}</h1>
+
+            {/* Visual */}
+            <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-panel-2)]">
+              <div
+                className={`relative flex w-full items-center justify-center ${
+                  selected.type === "character" ? "aspect-[4/5]" : "aspect-[16/10]"
+                }`}
+              >
+                {selected.status === "generating" ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <Spinner size={24} />
+                    <span className="text-xs text-[var(--color-muted)]">
+                      Generating…
+                    </span>
+                  </div>
+                ) : selected.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={selected.image}
+                    alt={selected.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-sm text-[var(--color-muted)]">No visual yet</span>
+                )}
               </div>
-              <button className="text-[var(--color-muted)] hover:text-[var(--color-text)]">
-                <Download size={17} />
-              </button>
             </div>
 
-            <div className="mt-5 flex items-center justify-between">
-              <label className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
-                Description
+            {/* Iterate */}
+            <div className="mt-4 rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-panel)]/40 p-4">
+              <label className="flex items-center gap-2 text-xs uppercase tracking-wide text-[var(--color-muted)]">
+                <Wand2 size={13} /> Change this visual
               </label>
-              <Pencil size={13} className="text-[var(--color-muted)]" />
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={editPrompt}
+                  onChange={(e) => setEditPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && editPrompt.trim()) {
+                      onIterate(selected.id, editPrompt.trim());
+                      setEditPrompt("");
+                    }
+                  }}
+                  placeholder="e.g. older, with a scar across the left eye"
+                  className="flex-1 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-2)] p-2.5 text-sm outline-none placeholder:text-[var(--color-muted-2)] focus:border-[var(--color-border)]"
+                />
+                <Button
+                  disabled={!editPrompt.trim() || selected.status === "generating"}
+                  onClick={() => {
+                    onIterate(selected.id, editPrompt.trim());
+                    setEditPrompt("");
+                  }}
+                >
+                  <Sparkles size={14} /> Update visual
+                </Button>
+              </div>
             </div>
+
+            {/* Description */}
+            <label className="mt-6 block text-xs uppercase tracking-wide text-[var(--color-muted)]">
+              Description
+            </label>
             <textarea
+              key={`${selected.id}-desc`}
               defaultValue={selected.description}
               onBlur={(e) => onUpdateDescription(selected.id, e.target.value)}
-              className="scroll-thin mt-2 h-24 w-full resize-none rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)]/50 p-3 text-sm leading-relaxed outline-none focus:border-[var(--color-border)]"
+              placeholder="What this asset looks like…"
+              className="scroll-thin mt-2 h-28 w-full resize-none rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)]/50 p-3 text-sm leading-relaxed outline-none placeholder:text-[var(--color-muted-2)] focus:border-[var(--color-border)]"
             />
+            <p className="mt-1.5 text-xs text-[var(--color-muted-2)]">
+              Saved when you click away. This text is what future generations read.
+            </p>
 
-            <div className="mt-4 flex items-center justify-between">
-              <button className="flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]">
-                <Upload size={14} /> Upload Reference Image
-              </button>
-              <button className="flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-sm font-medium text-black hover:bg-white/90">
-                <Sparkles size={14} /> Update Visual
-              </button>
-            </div>
-
-            {selected.voiceDescription && (
+            {/* Voice — characters only */}
+            {selected.type === "character" && (
               <>
                 <label className="mt-6 block text-xs uppercase tracking-wide text-[var(--color-muted)]">
                   Voice Description
                 </label>
                 <input
-                  defaultValue={selected.voiceDescription}
-                  className="mt-2 w-full rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)]/50 p-3 text-sm outline-none focus:border-[var(--color-border)]"
+                  key={`${selected.id}-voice`}
+                  defaultValue={selected.voiceDescription ?? ""}
+                  onBlur={(e) => onUpdateVoice(selected.id, e.target.value)}
+                  placeholder="e.g. adult female, warm, low register, unhurried"
+                  className="mt-2 w-full rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)]/50 p-3 text-sm outline-none placeholder:text-[var(--color-muted-2)] focus:border-[var(--color-border)]"
                 />
               </>
             )}
-
-            <div className="mt-8 flex items-center justify-between">
-              <label className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
-                Visual
-              </label>
-              <button className="flex items-center gap-2 rounded-full bg-[var(--color-panel-2)] px-3.5 py-1.5 text-sm hover:bg-[#26262a]">
-                <Wand2 size={14} /> Edit {selected.subtitle} Design
-              </button>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-4">
-              {[0, 1].map((i) => (
-                <div
-                  key={i}
-                  className="aspect-square overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-2)]"
-                >
-                  {selected.image && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={selected.image} alt="" className="h-full w-full object-cover" />
-                  )}
-                </div>
-              ))}
-            </div>
           </div>
         </section>
       )}

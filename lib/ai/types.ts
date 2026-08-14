@@ -84,6 +84,53 @@ export interface InitProjectInput {
   style: VisualStyle;
 }
 
+// ── Generation inputs ───────────────────────────────────────────────────────
+// Each generative call carries the full context it needs. Earlier versions
+// passed bare ids (e.g. generateShotStoryboard(shotId)), which meant the image
+// prompt literally read "storyboard frame for shot scene-1-shot-2" — the model
+// never saw the screenplay. Style travels per-call too, so concurrent users
+// can't leak each other's visual style through shared provider state.
+
+export interface AssetImageInput {
+  id: string;
+  projectId: string;
+  name: string;
+  type: AssetType;
+  description?: string;
+  styleId: string;
+}
+
+export interface IterateAssetInput {
+  assetId: string;
+  projectId: string;
+  name: string;
+  type: AssetType;
+  description?: string;
+  prompt: string;
+  styleId: string;
+}
+
+export interface StoryboardInput {
+  shotId: string;
+  projectId: string;
+  shotTitle: string;
+  screenplay?: string;
+  sceneTitle?: string;
+  sceneDescription?: string;
+  /** Character/location descriptions to keep the frame on-model. */
+  castNotes?: string[];
+  styleId: string;
+  format: Format;
+}
+
+export interface ScreenplayInput {
+  shotTitle: string;
+  sceneTitle: string;
+  sceneDescription: string;
+  storySummary: string;
+  format: Format;
+}
+
 // The one interface every generation backend implements.
 export interface AIProvider {
   listFormats(): Promise<FormatOption[]>;
@@ -92,11 +139,10 @@ export interface AIProvider {
   regenerateOutlines(idea: string, format: Format): Promise<StoryOutline[]>;
   listStyles(): Promise<VisualStyle[]>;
   initProject(input: InitProjectInput): Promise<Project>;
-  generateAssetImage(
-    asset: Pick<Asset, "id" | "name" | "type" | "description">
-  ): Promise<{ id: string; image: string }>;
-  iterateAsset(assetId: string, prompt: string): Promise<{ image: string }>;
-  generateShotStoryboard(shotId: string): Promise<{ image: string }>;
+  generateAssetImage(input: AssetImageInput): Promise<{ id: string; image: string }>;
+  iterateAsset(input: IterateAssetInput): Promise<{ image: string }>;
+  generateShotStoryboard(input: StoryboardInput): Promise<{ image: string }>;
+  generateScreenplay(input: ScreenplayInput): Promise<{ text: string }>;
   generateVideo(target: { sceneId?: string; shotId?: string }): Promise<{ url: string }>;
   runCommand(prompt: string): Promise<{ message: string }>;
 }

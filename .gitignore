@@ -4,3 +4,7 @@ dist/
 .env*
 !.env.example
 .DS_Store
+dev.out.log
+dev.err.log
+tsconfig.tsbuildinfo
+.claude/settings.local.json

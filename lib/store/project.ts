@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { idbStorage } from "@/lib/store/idbStorage";
 import type {
+  Asset,
   Format,
   Project,
   Scene,
@@ -15,7 +16,9 @@ import type {
 export interface Toast {
   id: string;
   message: string;
-  variant?: "loading" | "success";
+  variant?: "loading" | "success" | "warning" | "error";
+  /** Optional second line, e.g. why a live call fell back to sample output. */
+  detail?: string;
 }
 
 interface WizardDraft {
@@ -59,6 +62,10 @@ interface State {
   getCachedAsset: (projectId: string, assetId: string) => string | undefined;
   cacheAsset: (projectId: string, assetId: string, image: string) => void;
   deleteAsset: (projectId: string, assetId: string) => void;
+  addAsset: (projectId: string, asset: Asset) => void;
+  updateAsset: (projectId: string, assetId: string, patch: Partial<Asset>) => void;
+  deleteShot: (projectId: string, sceneId: string, shotId: string) => void;
+  deleteProject: (id: string) => void;
   addScene: (projectId: string) => void;
   updateScene: (projectId: string, sceneId: string, patch: Partial<Scene>) => void;
   deleteScene: (projectId: string, sceneId: string) => void;
@@ -152,6 +159,33 @@ export const useStore = create<State>()(
             assets: p.assets.filter((a) => a.id !== assetId),
           })),
         })),
+      addAsset: (projectId, asset) =>
+        set((s) => ({
+          projects: patchProject(s.projects, projectId, (p) => ({
+            ...p,
+            assets: [...p.assets, asset],
+          })),
+        })),
+      updateAsset: (projectId, assetId, patch) =>
+        set((s) => ({
+          projects: patchProject(s.projects, projectId, (p) => ({
+            ...p,
+            assets: p.assets.map((a) => (a.id === assetId ? { ...a, ...patch } : a)),
+          })),
+        })),
+      deleteShot: (projectId, sceneId, shotId) =>
+        set((s) => ({
+          projects: patchProject(s.projects, projectId, (p) => ({
+            ...p,
+            scenes: p.scenes.map((sc) =>
+              sc.id === sceneId
+                ? { ...sc, shots: sc.shots.filter((sh) => sh.id !== shotId) }
+                : sc
+            ),
+          })),
+        })),
+      deleteProject: (id) =>
+        set((s) => ({ projects: s.projects.filter((p) => p.id !== id) })),
       addScene: (projectId) =>
         set((s) => ({
           projects: patchProject(s.projects, projectId, (p) => ({

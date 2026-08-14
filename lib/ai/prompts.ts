@@ -25,6 +25,13 @@ Give 2 characters and 2 settings per outline. Match the requested video format's
 Same JSON shape and rules as generateOutlines: a JSON array of 3 objects with
 id, title, description, characters[2], settings[2]. Return ONLY the JSON array.`,
 
+  generateScreenplay: `Write the screenplay beat for ONE shot.
+Return plain text only — no JSON, no markdown, no scene numbers.
+Format: a short slugline in CAPS on the first line, a blank line, then 2-4 sentences of
+action describing exactly what the camera sees. Include dialogue only if it earns its place,
+formatted as CHARACTER on its own line followed by the line spoken.
+Keep it shootable: describe what is visible, not what a character feels.`,
+
   runCommand: `The user typed a natural-language command into the workspace command bar to edit their project
 (e.g. "make all characters talk like pirates", "make this a wide-angle shot").
 Acknowledge concisely what you would apply, in one short sentence, plain text only.`,
