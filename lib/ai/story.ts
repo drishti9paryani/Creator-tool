@@ -49,19 +49,33 @@ const NOT_A_NAME = new Set(
     .split(" ")
 );
 
-/** Capitalised words treated as proper names. */
-function properNouns(idea: string): string[] {
-  const out: string[] = [];
+// A capitalised word after one of these is a PLACE, not a person. Without this
+// split, "two rival chefs open food trucks in Lagos" produced a character
+// called Lagos.
+const LOCATIVE = new Set(
+  "in at from near across around outside inside to onto within beyond above below under over".split(" ")
+);
+
+/** Capitalised words from the idea, split into likely people and likely places. */
+function properNouns(idea: string): { people: string[]; places: string[] } {
+  const people: string[] = [];
+  const places: string[] = [];
+
   for (const sentence of idea.split(/[.!?]+/)) {
-    for (const t of sentence.trim().split(/\s+/)) {
+    const tokens = sentence.trim().split(/\s+/);
+    tokens.forEach((t, i) => {
       const clean = t.replace(/[^A-Za-z'-]/g, "");
-      if (clean.length < 2) continue;
+      if (clean.length < 2) return;
       const lower = clean.toLowerCase();
-      if (STOPWORDS.has(lower) || NOT_A_NAME.has(lower)) continue;
-      if (/^[A-Z][a-z'-]+$/.test(clean)) out.push(clean);
-    }
+      if (STOPWORDS.has(lower) || NOT_A_NAME.has(lower)) return;
+      if (!/^[A-Z][a-z'-]+$/.test(clean)) return;
+
+      const prev = (tokens[i - 1] ?? "").replace(/[^A-Za-z]/g, "").toLowerCase();
+      (LOCATIVE.has(prev) ? places : people).push(clean);
+    });
   }
-  return [...new Set(out)];
+
+  return { people: [...new Set(people)], places: [...new Set(places)] };
 }
 
 const titleCase = (s: string) =>
@@ -114,58 +128,90 @@ interface Archetype {
 }
 
 interface Ctx {
+  /** The user's own phrasing, used verbatim as a noun clause. */
   subject: string;
   terms: string[];
   names: string[];
-  place: string;
-  thing: string;
+  /** Two evocative place NAMES (not descriptions). */
+  places: [string, string];
+  /** An evocative prop name. */
+  prop: string;
+  /** " Design notes: a, b, c." — grammatical in any position, or "" if none. */
+  notes: string;
 }
+
+// NAMING RULE, learned the hard way: names come from curated pools; the user's
+// idea goes in DESCRIPTIONS. Splicing raw keywords into names produced titles
+// like "The Two Moment After" and a prop called "RETIRED" — the idea's words
+// are rarely nouns, and rarely grammatical where a name has to go. Pools always
+// read as authored; descriptions carry the specificity.
 
 const ARCHETYPES: Archetype[] = [
   {
     key: "turning-point",
-    titles: ["The Turning Point", "Everything Changes", "The Moment After"],
+    titles: [
+      "The Turning Point",
+      "Everything Changes",
+      "The Moment After",
+      "One Decision",
+      "The Split",
+      "Before and After",
+    ],
     describe: (c) =>
-      `${titleCase(c.subject)} begins as an ordinary pursuit, until one decision splits the story in two. ` +
-      `${c.names[0]} is certain of the path ahead — right up to the moment ${c.thing} makes that certainty impossible to hold. ` +
-      `What follows in ${c.place} is not the victory anyone expected, but something harder-won and more honest. ` +
+      `${c.names[0]} is at the centre of it: ${c.subject}. ` +
+      `It begins as an ordinary pursuit, until one decision splits the story in two and certainty stops being available. ` +
+      `What follows at ${c.places[0]} is not the victory anyone expected, but something harder-won and more honest. ` +
       `The final frame lands on the one thing that survived the change.`,
     beats: (c) => [
-      { title: "Ordinary World", description: `Establish ${c.names[0]} inside the familiar rhythm of ${c.place}. Everything works — which is exactly the problem.` },
-      { title: "The Break", description: `${c.thing} arrives and the rhythm shatters. ${c.names[0]} makes the choice that cannot be unmade.` },
-      { title: "The Cost", description: `${c.names[1]} confronts ${c.names[0]} with what the choice actually took. Neither of them is right.` },
-      { title: "What Remains", description: `The dust settles over ${c.place}. Hold on the one detail that proves the change was real.` },
+      { title: "Ordinary World", description: `Establish ${c.names[0]} inside the familiar rhythm of ${c.places[0]}. Everything works — which is exactly the problem.` },
+      { title: "The Break", description: `The rhythm shatters. ${c.names[0]} makes the choice that cannot be unmade.` },
+      { title: "The Cost", description: `At ${c.places[1]}, ${c.names[1]} confronts ${c.names[0]} with what the choice actually took. Neither of them is right.` },
+      { title: "What Remains", description: `The dust settles over ${c.places[0]}. Hold on the one detail that proves the change was real.` },
     ],
     roles: ["the one who decides", "the one who pays"],
   },
   {
     key: "the-reckoning",
-    titles: ["The Reckoning", "What It Cost", "The Price of It"],
+    titles: [
+      "The Reckoning",
+      "What It Cost",
+      "The Price of It",
+      "Paid in Full",
+      "The Long Bill",
+      "Nothing Is Free",
+    ],
     describe: (c) =>
-      `${c.names[0]} gets exactly what ${titleCase(c.subject)} promised — and discovers the bill comes later. ` +
-      `Early triumph in ${c.place} curdles as ${c.thing} exposes what was traded away to get here. ` +
+      `${c.names[0]} gets exactly what was wanted, and discovers the bill comes later. The premise: ${c.subject}. ` +
+      `Early triumph at ${c.places[0]} curdles as the trade behind it becomes impossible to ignore. ` +
       `${c.names[1]} saw it coming and said nothing, and that silence becomes the story's sharpest wound. ` +
       `It ends not with a reversal but with a reckoning: the thing is kept, and it is not enough.`,
     beats: (c) => [
-      { title: "The Win", description: `${c.names[0]} succeeds, publicly and completely, in ${c.place}. Let it feel genuinely good.` },
-      { title: "First Crack", description: `${c.thing} surfaces a detail that doesn't fit the triumph. ${c.names[0]} looks away.` },
+      { title: "The Win", description: `${c.names[0]} succeeds, publicly and completely, at ${c.places[0]}. Let it feel genuinely good.` },
+      { title: "First Crack", description: `A detail surfaces that doesn't fit the triumph. ${c.names[0]} looks away.` },
       { title: "The Silence", description: `${c.names[1]} could speak and doesn't. Play the whole beat on faces, not words.` },
-      { title: "The Bill", description: `The cost lands in full. ${c.names[0]} keeps what was won and understands what it replaced.` },
+      { title: "The Bill", description: `At ${c.places[1]}, the cost lands in full. ${c.names[0]} keeps what was won and understands what it replaced.` },
     ],
     roles: ["the one who wins", "the one who knew"],
   },
   {
     key: "unlikely-allies",
-    titles: ["Unlikely Allies", "Two Ways to Be Right", "Common Ground"],
+    titles: [
+      "Unlikely Allies",
+      "Two Ways to Be Right",
+      "Common Ground",
+      "Opposite Methods",
+      "The Truce",
+      "Neither One Wins",
+    ],
     describe: (c) =>
-      `Two forces with nothing in common are forced together by ${titleCase(c.subject)}. ` +
-      `${c.names[0]} works in absolutes; ${c.names[1]} works in exceptions — and ${c.thing} will not yield to either approach alone. ` +
-      `Their collision in ${c.place} is funnier and more painful than either expected. ` +
+      `Two people with nothing in common are forced together by the same problem: ${c.subject}. ` +
+      `${c.names[0]} works in absolutes; ${c.names[1]} works in exceptions — and neither approach survives alone. ` +
+      `Their collision at ${c.places[0]} is funnier and more painful than either expected. ` +
       `Neither converts the other. They simply build something that needed both of them.`,
     beats: (c) => [
-      { title: "Collision", description: `${c.names[0]} and ${c.names[1]} meet badly in ${c.place}. Establish both methods as legitimate.` },
-      { title: "Forced Together", description: `${c.thing} makes going alone impossible. Grudging first cooperation.` },
-      { title: "The Fracture", description: `The old difference resurfaces under pressure and nearly ends it.` },
+      { title: "Collision", description: `${c.names[0]} and ${c.names[1]} meet badly at ${c.places[0]}. Establish both methods as legitimate.` },
+      { title: "Forced Together", description: `Going alone stops being possible. Grudging first cooperation.` },
+      { title: "The Fracture", description: `At ${c.places[1]}, the old difference resurfaces under pressure and nearly ends it.` },
       { title: "Built Together", description: `The result stands because both were there. Neither one apologises.` },
     ],
     roles: ["the absolutist", "the improviser"],
@@ -178,24 +224,38 @@ const NAME_POOL = [
   ["Sena", "Vikram"], ["June", "Osei"], ["Lena", "Arjun"], ["Rey", "Petra"],
 ];
 
-const PLACE_TEMPLATES = [
-  "a place that remembers everything",
-  "a room too small for what happens in it",
-  "the edge of somewhere familiar",
-  "a landscape that refuses to stay still",
+// Place names that read as real locations in any genre.
+const PLACE_NAMES = [
+  "The Threshold", "The Long Room", "Open Ground", "The Back Lot",
+  "The Far Side", "The Quiet Hour", "The Waiting Floor", "Low Water",
+  "The Last Stop", "The Narrow Gate", "High Window", "The Turning Yard",
+];
+
+// Objects a story can revolve around, whatever it's about.
+const PROP_NAMES = [
+  "The Keepsake", "The Ledger", "The Marker", "The Token",
+  "The Unsent Letter", "The Worn Key", "The Old Photograph", "The Broken Watch",
 ];
 
 function buildCtx(idea: string, seed: number): Ctx {
   const terms = keyTerms(idea);
   const found = properNouns(idea);
   const fallback = pick(NAME_POOL, seed);
-  const names = [found[0] ?? fallback[0], found[1] ?? fallback[1]];
+  const names = [found.people[0] ?? fallback[0], found.people[1] ?? fallback[1]];
+
+  // A real place named in the idea beats a pooled one — "Lagos" is a better
+  // location than "The Long Room" when the user actually wrote Lagos.
+  const p1 = found.places[0] ?? pick(PLACE_NAMES, seed);
+  const p2Raw = found.places[1] ?? pick(PLACE_NAMES, seed + 5);
+  const p2 = p2Raw === p1 ? pick(PLACE_NAMES, seed + 7) : p2Raw;
+
   return {
     subject: subjectOf(idea),
     terms,
     names,
-    place: terms[1] ? `the world of ${terms[1]}` : pick(PLACE_TEMPLATES, seed >> 3),
-    thing: terms[0] ? `the matter of ${terms[0]}` : "the thing nobody wanted to name",
+    places: [p1, p2],
+    prop: pick(PROP_NAMES, seed),
+    notes: terms.length ? ` Design notes: ${terms.slice(0, 4).join(", ")}.` : "",
   };
 }
 
@@ -218,17 +278,12 @@ export function deriveOutlines(
 
   return ARCHETYPES.map((arc, i) => {
     const s = seed + i * 131;
-    // Weave the idea's own vocabulary into the title. A fixed archetype name
-    // ("The Reckoning") reads generic on every project and made two unrelated
-    // ideas produce identical titles; "The Lighthouse Reckoning" doesn't.
-    const base = pick(arc.titles, s + variant);
-    const noun = ctx.terms[i % Math.max(ctx.terms.length, 1)];
-    const title =
-      noun && base.startsWith("The ")
-        ? `The ${titleCase(noun)} ${base.slice(4)}`
-        : noun
-          ? `${base}: ${titleCase(noun)}`
-          : base;
+    // Title comes from the archetype's pool, never spliced with the idea's
+    // keywords — see the NAMING RULE above.
+    // Hash the variant rather than adding it: arithmetic offsets kept landing
+    // on multiples of the pool size, so "Regenerate options" returned the same
+    // three titles and looked like a no-op.
+    const title = pick(arc.titles, hash(`${arc.key}|${variant}|${text}`));
     const full = arc.describe(ctx);
     // A 9:16 short can't carry four sentences of setup — drop the last one.
     const description = trim
@@ -238,13 +293,17 @@ export function deriveOutlines(
       id: `${arc.key}-${variant}-${i + 1}`,
       title,
       description,
+      // A comma-separated keyword list is grammatical wherever it lands, unlike
+      // the user's raw sentence — which read as "…in a story about A retired
+      // postman discovers the letters he never delivered." These lines become
+      // image prompts, so concrete keywords serve them better than prose.
       characters: [
-        `${ctx.names[0].toUpperCase()}: ${titleCase(arc.roles[0])} — carries ${ctx.terms[0] ?? "the story"} in every frame; readable at a glance, even in silhouette.`,
-        `${ctx.names[1].toUpperCase()}: ${titleCase(arc.roles[1])} — visually the opposite of ${ctx.names[0]}; softer lines, warmer palette.`,
+        `${ctx.names[0].toUpperCase()}: ${titleCase(arc.roles[0])}. Reads instantly in silhouette; the face carries the whole arc.${ctx.notes}`,
+        `${ctx.names[1].toUpperCase()}: ${titleCase(arc.roles[1])}, visually the opposite of ${ctx.names[0]} — softer lines, warmer palette, more room in the frame.${ctx.notes}`,
       ],
       settings: [
-        `${titleCase(ctx.place)}: Where the story's pressure is highest. ${titleCase(ctx.terms[0] ?? "the subject")} defines its texture and light.`,
-        `The Turn: A second location that only appears once ${ctx.names[0]} has committed — colder, wider, less forgiving.`,
+        `${ctx.places[0]}: Where the story's pressure is highest. Texture and light should feel specific, never generic.${ctx.notes}`,
+        `${ctx.places[1]}: The second location, appearing only once ${ctx.names[0]} has committed — colder, wider, less forgiving.${ctx.notes}`,
       ],
     };
   });
@@ -259,7 +318,26 @@ export function deriveScenes(outline: StoryOutline, format: Format): Scene[] {
   const arcKey = outline.id.split("-").slice(0, -2).join("-");
   const arc = ARCHETYPES.find((a) => a.key === arcKey) ?? ARCHETYPES[0];
   const seed = hash(outline.id);
-  const ctx = buildCtx(outline.description || outline.title, seed);
+
+  // Read the cast and locations back OUT of the outline rather than re-deriving
+  // them. Re-deriving picked a different seed and produced scenes set in places
+  // that appear nowhere in the project's own location list.
+  const nameOf = (line: string) => {
+    const idx = line.indexOf(":");
+    const raw = (idx >= 0 ? line.slice(0, idx) : line).trim();
+    // Asset names are stored uppercase for the tiles; scene prose needs them
+    // title-cased or every sentence reads as shouting ("Establish LENA…").
+    return raw === raw.toUpperCase() ? titleCase(raw.toLowerCase()) : raw;
+  };
+  const castNames = (outline.characters ?? []).map(nameOf).filter(Boolean);
+  const placeNames = (outline.settings ?? []).map(nameOf).filter(Boolean);
+
+  const base = buildCtx(outline.description || outline.title, seed);
+  const ctx: Ctx = {
+    ...base,
+    names: [castNames[0] ?? base.names[0], castNames[1] ?? base.names[1]],
+    places: [placeNames[0] ?? base.places[0], placeNames[1] ?? base.places[1]],
+  };
 
   // Shorts run tighter: fewer scenes, fewer shots each.
   const beats = arc.beats(ctx).slice(0, format === "short" ? 3 : 4);
@@ -314,21 +392,22 @@ export function deriveAssets(outline: StoryOutline): Asset[] {
   const characters = fromLines(outline.characters ?? [], "character");
   const locations = fromLines(outline.settings ?? [], "location");
 
-  // One prop derived from the story's own vocabulary, so the Props row is never
-  // empty (the source build shipped it permanently blank in mock mode).
-  const term = keyTerms(outline.description || outline.title, 3)[0];
-  const props: Asset[] = term
-    ? [
-        {
-          id: slugify(`${term}-object`),
-          type: "prop",
-          name: titleCase(term).toUpperCase(),
-          subtitle: "Prop",
-          description: `The object the story keeps returning to. Should read instantly in silhouette and carry visible wear from use.`,
-          status: "generating" as const,
-        },
-      ]
-    : [];
+  // One prop so the Props row is never empty (the source build shipped it
+  // permanently blank in mock mode). Name from the pool, description from the
+  // story — see the NAMING RULE.
+  const propName = pick(PROP_NAMES, hash(outline.id || outline.title));
+  const props: Asset[] = [
+    {
+      id: slugify(`${propName}-prop`),
+      type: "prop",
+      name: propName.toUpperCase(),
+      subtitle: "Prop",
+      description:
+        `The object this story keeps returning to. It should read instantly in silhouette, ` +
+        `carry visible wear from use, and belong unmistakably to the world of "${outline.title}".`,
+      status: "generating" as const,
+    },
+  ];
 
   return [...characters, ...locations, ...props];
 }

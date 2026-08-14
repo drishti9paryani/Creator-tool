@@ -40,18 +40,31 @@ describe("story engine", () => {
     const b = deriveOutlines(IDEA_B, "video");
     expect(a[0].description).not.toEqual(b[0].description);
     expect(a[0].characters).not.toEqual(b[0].characters);
-    expect(a.map((o) => o.title)).not.toEqual(b.map((o) => o.title));
+    expect(a[0].settings).not.toEqual(b[0].settings);
+    // Titles come from curated pools and MAY coincide across ideas — that's the
+    // deliberate trade for names that always read as authored English.
   });
 
   it("regenerate returns a different trio for the same idea", () => {
     const first = deriveOutlines(IDEA_A, "video", 0);
     const second = deriveOutlines(IDEA_A, "video", 1);
     expect(first.map((o) => o.id)).not.toEqual(second.map((o) => o.id));
+    // Titles must visibly change too — ids alone changing looks like nothing
+    // happened when a tester clicks "Regenerate options".
+    expect(first.map((o) => o.title)).not.toEqual(second.map((o) => o.title));
   });
 
   it("uses proper nouns from the idea as character names", () => {
     const out = deriveOutlines("Mira and Dorian argue about a lighthouse", "video");
     expect(out[0].characters.join(" ")).toContain("MIRA");
+    expect(out[0].characters.join(" ")).toContain("DORIAN");
+  });
+
+  // A city is not a person: "…food trucks in Lagos" must not cast Lagos.
+  it("routes place-names after a preposition to locations, not characters", () => {
+    const out = deriveOutlines(IDEA_B, "video")[0];
+    expect(out.characters.join(" ")).not.toContain("LAGOS");
+    expect(out.settings.join(" ")).toContain("Lagos");
   });
 
   it("shorts get a tighter arc than long-form", () => {
@@ -93,6 +106,47 @@ describe("story engine", () => {
     expect(assets.filter((a) => a.type === "prop").length).toBeGreaterThan(0);
     expect(assets.every((a) => a.status === "generating")).toBe(true);
     expect(new Set(assets.map((a) => a.id)).size).toBe(assets.length);
+  });
+
+  // Regression: an earlier version spliced the idea's keywords into names and
+  // produced titles like "The Two Moment After" and a prop called "RETIRED".
+  // Names must come from curated pools; only descriptions carry the idea.
+  it("never splices raw idea keywords into names", () => {
+    for (const idea of [IDEA_A, IDEA_B, "retired two lighthouse things"]) {
+      const outline = deriveOutlines(idea, "video")[0];
+      const terms = keyTerms(idea);
+      const assets = deriveAssets(outline);
+
+      const nameOf = (line: string) => line.split(":")[0].trim();
+      // Locations are exempt: a place the user actually named ("…in Lagos")
+      // SHOULD become a location. Only people, titles and props must come
+      // from the pools.
+      const names = [
+        outline.title,
+        ...outline.characters.map(nameOf),
+        ...assets.filter((a) => a.type !== "location").map((a) => a.name),
+      ];
+
+      for (const name of names) {
+        for (const term of terms) {
+          expect(
+            name.toLowerCase().split(/\s+/),
+            `"${name}" should not be built from the raw keyword "${term}"`
+          ).not.toContain(term);
+        }
+      }
+      // But the idea MUST still show up in the prose.
+      expect(outline.description.toLowerCase()).toContain(terms[0]);
+    }
+  });
+
+  it("scenes are set in the project's own locations", () => {
+    const outline = deriveOutlines(IDEA_A, "video")[0];
+    const places = outline.settings.map((s) => s.split(":")[0].trim());
+    const scenes = deriveScenes(outline, "video");
+    const allText = scenes.map((s) => s.description).join(" ");
+    // At least one scene must reference a location the project actually has.
+    expect(places.some((p) => allText.includes(p))).toBe(true);
   });
 
   it("handles empty and junk input without throwing", () => {
