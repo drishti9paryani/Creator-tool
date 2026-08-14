@@ -60,6 +60,25 @@ describe("story engine", () => {
     expect(out[0].characters.join(" ")).toContain("DORIAN");
   });
 
+  // Regression from a real screenshot: "Peering into a mirror reveals…" cast a
+  // character named PEERING. Sentence-initial capitals are grammar, not names —
+  // and every built-in suggestion opens with a gerund.
+  it("does not cast sentence-opening verbs as characters", () => {
+    const openers = [
+      "Peering into a mirror reveals a serene glowing forest on the other side.",
+      "Playing a thrifted cassette broadcasts strange radio chatter.",
+      "Operating an isolated lighthouse reveals hidden structures.",
+      "Opening an umbrella on a clear day creates a dry sanctuary.",
+    ];
+    for (const idea of openers) {
+      const cast = deriveOutlines(idea, "video")[0].characters.join(" ");
+      const firstWord = idea.split(" ")[0].toUpperCase();
+      expect(cast, `"${firstWord}" must not become a character`).not.toContain(
+        firstWord
+      );
+    }
+  });
+
   // A city is not a person: "…food trucks in Lagos" must not cast Lagos.
   it("routes place-names after a preposition to locations, not characters", () => {
     const out = deriveOutlines(IDEA_B, "video")[0];
@@ -168,6 +187,23 @@ describe("story engine", () => {
     expect(keyTerms("the a of and postman letters")).toEqual(["postman", "letters"]);
     expect(subjectOf("one two three four", 2)).toBe("one two…");
     expect(subjectOf("")).toBe("an untold story");
+  });
+
+  // The built-in suggestions lead with Hindu narratives; casting them with
+  // "Mara and Elias" reads as the tool ignoring the subject matter.
+  it("casts Indian-register stories with matching names", () => {
+    const indic = deriveOutlines(
+      "A young cowherd lifts an entire hill on one finger to shelter his village from a god's storm.",
+      "video"
+    )[0].characters.join(" ");
+    expect(indic).toMatch(/MEERA|RADHA|SITA|ANAYA|DEVIKA|TARA|KAVYA|UMA/);
+
+    // Non-Indian ideas keep the general pool.
+    const other = deriveOutlines(
+      "Two rival chefs open competing food trucks downtown",
+      "video"
+    )[0].characters.join(" ");
+    expect(other).toMatch(/MARA|NOVA|IRIS|ADA|JUNE|REY/);
   });
 });
 

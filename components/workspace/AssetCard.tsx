@@ -60,10 +60,17 @@ export function AssetCard({
         )}
       </button>
 
-      <p className="mt-2 text-[13px] font-semibold uppercase tracking-wide">
+      <p className="mt-2 truncate text-[13px] font-semibold uppercase tracking-wide">
         {asset.name}
       </p>
       <p className="text-[11px] text-[var(--color-muted)]">{asset.subtitle}</p>
+      {/* The auto-filled context, visible without opening the asset. A grid of
+          names alone gave no sense of what had actually been written. */}
+      {asset.description && (
+        <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-[var(--color-muted-2)]">
+          {asset.description}
+        </p>
+      )}
     </div>
   );
 }

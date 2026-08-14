@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUp, FileText, RefreshCw, AlertTriangle } from "lucide-react";
+import { ArrowUp, FileText, RefreshCw, AlertTriangle, Pencil } from "lucide-react";
 import { WizardShell } from "@/components/wizard/WizardShell";
 import { WizardFooter } from "@/components/wizard/WizardFooter";
 import { FormatCard } from "@/components/wizard/FormatCard";
@@ -361,18 +361,27 @@ export default function CreateWizard() {
         }
       >
         <div className="animate-fade-up mx-auto flex max-w-[420px] flex-col items-center text-center">
-          <div className="w-[220px] overflow-hidden rounded-2xl border border-[var(--color-border-soft)]">
+          {/* The whole card is a way back to the grid — "Previous" was the only
+              route to a different style, which reads as navigation, not editing. */}
+          <button
+            onClick={() => setStep(4)}
+            className="group w-[220px] overflow-hidden rounded-2xl border border-[var(--color-border-soft)] transition hover:border-[var(--color-accent)]"
+            aria-label={`Change visual style — currently ${selectedStyle.label}`}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={selectedStyle.thumbnail}
               alt={selectedStyle.label}
-              className="aspect-square w-full object-cover"
+              className="aspect-square w-full object-cover transition group-hover:opacity-80"
             />
-          </div>
+          </button>
           <h3 className="mt-4 text-lg font-bold">{selectedStyle.label}</h3>
           <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted)]">
             {selectedStyle.description}
           </p>
+          <Button variant="pill" className="mt-5" onClick={() => setStep(4)}>
+            <Pencil size={14} /> Change style
+          </Button>
         </div>
       </WizardShell>
     );

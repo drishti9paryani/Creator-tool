@@ -60,6 +60,7 @@ const LOCATIVE = new Set(
 function properNouns(idea: string): { people: string[]; places: string[] } {
   const people: string[] = [];
   const places: string[] = [];
+  const lowerIdea = idea.toLowerCase();
 
   for (const sentence of idea.split(/[.!?]+/)) {
     const tokens = sentence.trim().split(/\s+/);
@@ -69,6 +70,24 @@ function properNouns(idea: string): { people: string[]; places: string[] } {
       const lower = clean.toLowerCase();
       if (STOPWORDS.has(lower) || NOT_A_NAME.has(lower)) return;
       if (!/^[A-Z][a-z'-]+$/.test(clean)) return;
+
+      // The first word of a sentence is capitalised by grammar, not because
+      // it's a name — "Peering into a mirror…" cast a character called
+      // PEERING. Accept it only with corroboration: it pairs with another
+      // capitalised word ("Mira and Dorian…"), or it recurs later in the text
+      // (a real subject gets mentioned more than once).
+      if (i === 0) {
+        // A gerund/participle/adverb opener is never a name.
+        if (/(ing|ed|ly)$/.test(lower)) return;
+
+        const next = (tokens[1] ?? "").replace(/[^A-Za-z]/g, "").toLowerCase();
+        const after = (tokens[2] ?? "").replace(/[^A-Za-z'-]/g, "");
+        const pairedWithName =
+          (next === "and" || next === "&") && /^[A-Z][a-z'-]+$/.test(after);
+        const recurs = lowerIdea.split(lower).length - 1 > 1;
+
+        if (!pairedWithName && !recurs) return;
+      }
 
       const prev = (tokens[i - 1] ?? "").replace(/[^A-Za-z]/g, "").toLowerCase();
       (LOCATIVE.has(prev) ? places : people).push(clean);
@@ -82,7 +101,7 @@ const titleCase = (s: string) =>
   s.replace(/\b([a-z])(\w*)/g, (_, a: string, b: string) => a.toUpperCase() + b);
 
 /** The idea trimmed to a usable subject phrase, without trailing punctuation. */
-export function subjectOf(idea: string, maxWords = 12): string {
+export function subjectOf(idea: string, maxWords = 20): string {
   const clean = idea.trim().replace(/\s+/g, " ").replace(/[.!?]+$/, "");
   if (!clean) return "an untold story";
   const parts = clean.split(" ");
@@ -221,8 +240,32 @@ const ARCHETYPES: Archetype[] = [
 // Fallback names when the idea contains no proper nouns.
 const NAME_POOL = [
   ["Mara", "Elias"], ["Nova", "Kade"], ["Iris", "Tomas"], ["Ada", "Rune"],
-  ["Sena", "Vikram"], ["June", "Osei"], ["Lena", "Arjun"], ["Rey", "Petra"],
+  ["June", "Osei"], ["Rey", "Petra"],
 ];
+
+// Indian/mythological register. A story about a cowherd lifting a hill to
+// shelter his village should not be cast with "Mara and Elias" — the built-in
+// suggestions lead with Hindu narratives, so the default names have to follow.
+const INDIC_NAME_POOL = [
+  ["Meera", "Arjun"], ["Radha", "Vikram"], ["Sita", "Ishaan"], ["Anaya", "Kabir"],
+  ["Devika", "Rohan"], ["Tara", "Aditya"], ["Kavya", "Nakul"], ["Uma", "Bhalu"],
+];
+
+// Cues that a story sits in an Indian / mythological register.
+const INDIC_CUES = new Set(
+  ("cowherd village god goddess deity temple sage rishi hill mountain monsoon " +
+    "storm king queen prince princess archer chariot charioteer bow arrow " +
+    "devotee prayer blessing curse demon serpent elephant lotus sari dhoti " +
+    "krishna shiva vishnu rama sita hanuman ganesha indra durga kali arjuna " +
+    "karna eklavya savitri yamuna ganga ashram guru dharma karma avatar mango " +
+    "thumb offering ritual festival diya incense")
+    .split(" ")
+);
+
+function isIndicRegister(idea: string): boolean {
+  const words = idea.toLowerCase().split(/[^a-z]+/);
+  return words.some((w) => INDIC_CUES.has(w));
+}
 
 // Place names that read as real locations in any genre.
 const PLACE_NAMES = [
@@ -240,7 +283,8 @@ const PROP_NAMES = [
 function buildCtx(idea: string, seed: number): Ctx {
   const terms = keyTerms(idea);
   const found = properNouns(idea);
-  const fallback = pick(NAME_POOL, seed);
+  const pool = isIndicRegister(idea) ? INDIC_NAME_POOL : NAME_POOL;
+  const fallback = pick(pool, seed);
   const names = [found.people[0] ?? fallback[0], found.people[1] ?? fallback[1]];
 
   // A real place named in the idea beats a pooled one — "Lagos" is a better
