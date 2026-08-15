@@ -354,11 +354,70 @@ export function deriveOutlines(
 }
 
 /**
+ * How long one shot runs. 4s because that is the shortest clip Veo will sell —
+ * asking for 3s still bills 4s. Change this and the shot count changes with it.
+ * See docs/VIDEO-COST-ANALYSIS.md §1.
+ */
+export const SECONDS_PER_SHOT = 4;
+
+/** Establishing / Close / Reaction is one scene's worth of coverage. */
+const SHOTS_PER_SCENE = 3;
+
+/** Runtime in seconds when the caller doesn't ask for a specific length. */
+export const DEFAULT_TARGET_SECONDS: Record<Format, number> = {
+  short: 32,
+  video: 360,
+};
+
+/**
+ * What a scene DOES inside its act. Only used when an act holds more than one
+ * scene — these read as beats of the same movement, not as new acts.
+ */
+const SCENE_MOVES = [
+  { label: "Opening Image", how: "Start on the object, not the person. Let the frame ask the question." },
+  { label: "The Routine", how: "Show the thing that is about to stop working, while it still works." },
+  { label: "First Signal", how: "One detail lands wrong. Nobody in frame reacts to it yet." },
+  { label: "Pressure", how: "Push the same situation one notch further than is comfortable." },
+  { label: "The Ask", how: "Someone wants something and says so plainly. Play the silence after." },
+  { label: "Refusal", how: "The answer is no. Hold on the person who has to live with it." },
+  { label: "Small Win", how: "Something goes right. Undercut it in the last second of the shot." },
+  { label: "The Slip", how: "A mistake nobody catches. The camera catches it." },
+  { label: "Escalation", how: "Raise the stakes physically — distance, weather, noise, a closing door." },
+  { label: "The Turn", how: "The scene ends somewhere other than where it started. Show the pivot, don't say it." },
+  { label: "Aftermath", how: "Everyone has gone. Shoot what they left behind." },
+  { label: "Quiet Beat", how: "No plot. Breathing room, texture, weather. Earn the next scene." },
+];
+
+/** Camera coverage. Twelve entries so a 90-shot film doesn't cycle three. */
+const SHOT_ANGLES = [
+  { label: "Establishing", how: "Wide. Let the location do the talking before anyone speaks." },
+  { label: "Close", how: "Tight on the face. The decision happens here, not in dialogue." },
+  { label: "Reaction", how: "Cut to what the choice costs — the other person, or the empty space." },
+  { label: "Over Shoulder", how: "Put us behind one of them. We see what they see and how they hold it." },
+  { label: "Insert", how: "Hands, an object, a detail. No faces. Let the prop carry the beat." },
+  { label: "Two Shot", how: "Both of them in frame. The distance between them is the information." },
+  { label: "Low Angle", how: "Camera below eye line. Whoever is standing gains the room." },
+  { label: "High Angle", how: "Look down. Make the space larger than the person in it." },
+  { label: "Tracking", how: "Move with them. The walk is the scene; the destination isn't." },
+  { label: "Profile", how: "Side on, no eye contact with camera. Private, unguarded." },
+  { label: "Wide Hold", how: "Lock off and let the action leave the frame. Don't follow it." },
+  { label: "Detail", how: "The smallest thing in the scene, filling the whole frame." },
+];
+
+/**
  * Scenes + shots derived from the chosen outline's archetype. Every shot gets a
  * screenplay line so the Shot Builder and storyboard generation have real
  * context to work from instead of a bare id.
+ *
+ * `targetSeconds` sets the runtime. It is a parameter, not a constant, because
+ * the previous hard-coded 12-shot ceiling was the single thing stopping this app
+ * from making anything longer than 48 seconds.
  */
-export function deriveScenes(outline: StoryOutline, format: Format): Scene[] {
+export function deriveScenes(
+  outline: StoryOutline,
+  format: Format,
+  targetSeconds?: number
+): Scene[] {
   const arcKey = outline.id.split("-").slice(0, -2).join("-");
   const arc = ARCHETYPES.find((a) => a.key === arcKey) ?? ARCHETYPES[0];
   const seed = hash(outline.id);
@@ -383,30 +442,66 @@ export function deriveScenes(outline: StoryOutline, format: Format): Scene[] {
     places: [placeNames[0] ?? base.places[0], placeNames[1] ?? base.places[1]],
   };
 
-  // Shorts run tighter: fewer scenes, fewer shots each.
-  const beats = arc.beats(ctx).slice(0, format === "short" ? 3 : 4);
-  const shotsPer = format === "short" ? 2 : 3;
+  // The archetype's beats are ACTS, not scenes. A 4-act story is correct at any
+  // length — what scales with duration is how many scenes sit inside each act.
+  // Before this, `shotsPer = 3` hard-capped every project at 12 shots (48s), so
+  // the app could not produce anything longer than a sketch regardless of the
+  // video model chosen. See docs/VIDEO-COST-ANALYSIS.md §6(b)(0).
+  const acts = arc.beats(ctx).slice(0, format === "short" ? 3 : 4);
+  const seconds = targetSeconds ?? DEFAULT_TARGET_SECONDS[format];
 
-  const SHOT_ANGLES = [
-    { label: "Establishing", how: "Wide. Let the location do the talking before anyone speaks." },
-    { label: "Close", how: "Tight on the face. The decision happens here, not in dialogue." },
-    { label: "Reaction", how: "Cut to what the choice costs — the other person, or the empty space." },
-  ];
+  // Total shots the runtime asks for, then packed into scenes of three.
+  const totalShots = Math.max(
+    acts.length * SHOTS_PER_SCENE,
+    Math.round(seconds / SECONDS_PER_SHOT)
+  );
+  const totalScenes = Math.ceil(totalShots / SHOTS_PER_SCENE);
 
-  return beats.map((beat, i) => ({
-    id: `scene-${i + 1}`,
-    title: beat.title,
-    description: beat.description,
-    shots: Array.from({ length: shotsPer }, (_, j) => {
-      const angle = SHOT_ANGLES[j % SHOT_ANGLES.length];
-      return {
-        id: `scene-${i + 1}-shot-${j + 1}`,
-        title: `${angle.label} — ${beat.title}`,
-        screenplay: `${beat.description} ${angle.how}`,
-        status: "empty" as const,
-      };
-    }),
-  }));
+  // Spread scenes across the acts, remainder to the middle where the story
+  // actually lives — a 30-scene film should not open with eight scenes of
+  // "Ordinary World" and close on one.
+  const perAct = Array.from({ length: acts.length }, () =>
+    Math.floor(totalScenes / acts.length)
+  );
+  for (let r = totalScenes % acts.length, i = 0; r > 0; r--, i++) {
+    perAct[Math.floor(acts.length / 2) - 1 + (i % 2 === 0 ? 0 : 1)] += 1;
+  }
+
+  const scenes: Scene[] = [];
+  acts.forEach((beat, a) => {
+    for (let s = 0; s < perAct[a]; s++) {
+      // Walk the pool in order rather than hashing into it: SCENE_MOVES is
+      // written as an escalation, so a film that steps through it reads as a
+      // film. Hashing produced acts that opened on "Refusal".
+      const move = SCENE_MOVES[scenes.length % SCENE_MOVES.length];
+      const n = scenes.length + 1;
+      // One scene per act keeps the old, cleaner title. Only subdivide when the
+      // requested duration actually forced more than one.
+      const title = perAct[a] === 1 ? beat.title : `${beat.title} — ${move.label}`;
+      const description =
+        perAct[a] === 1 ? beat.description : `${beat.description} ${move.how}`;
+      scenes.push({
+        id: `scene-${n}`,
+        title,
+        description,
+        shots: Array.from({ length: SHOTS_PER_SCENE }, (_, j) => {
+          // Cycling three angles across 90 shots reads as a template. Offset the
+          // pool per scene so the same triad never repeats back to back.
+          const angle = SHOT_ANGLES[(n + j) % SHOT_ANGLES.length];
+          return {
+            id: `scene-${n}-shot-${j + 1}`,
+            // Act title only — the scene already carries the move, and a
+            // three-part shot title is unreadable in the Shot Builder.
+            title: `${angle.label} — ${beat.title}`,
+            screenplay: `${description} ${angle.how}`,
+            status: "empty" as const,
+          };
+        }),
+      });
+    }
+  });
+
+  return scenes;
 }
 
 /**

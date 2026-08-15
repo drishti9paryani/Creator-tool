@@ -3,6 +3,7 @@ import {
   deriveAssets,
   deriveOutlines,
   deriveScenes,
+  SECONDS_PER_SHOT,
   deriveTitle,
   keyTerms,
   subjectOf,
@@ -249,5 +250,59 @@ describe("image spend guard", () => {
     const b = `b-${Math.random()}`;
     expect(chargeImage(a).ok).toBe(true);
     expect(chargeImage(b).ok).toBe(true);
+  });
+});
+
+// ── Runtime length ─────────────────────────────────────────────────────────
+// The engine used to hard-cap at 4 scenes x 3 shots = 12 shots = 48 seconds,
+// which made any long-form target impossible regardless of video model. These
+// tests are the guard against that ceiling coming back.
+describe("deriveScenes runtime length", () => {
+  const outline = deriveOutlines("a retired postman finds the letters", "video")[0];
+  const shotsIn = (s: ReturnType<typeof deriveScenes>) =>
+    s.reduce((n, sc) => n + sc.shots.length, 0);
+
+  it("defaults a long-form video to roughly six minutes, not 48 seconds", () => {
+    const shots = shotsIn(deriveScenes(outline, "video"));
+    expect(shots * SECONDS_PER_SHOT).toBeGreaterThanOrEqual(340);
+    expect(shots).toBeGreaterThan(12); // the old ceiling
+  });
+
+  it("scales shot count with the requested duration", () => {
+    const short = shotsIn(deriveScenes(outline, "video", 60));
+    const long = shotsIn(deriveScenes(outline, "video", 600));
+    expect(long).toBeGreaterThan(short * 5);
+  });
+
+  // Below the 4-act floor (4 acts x 3 shots x 4s = 48s) the structure wins over
+  // the requested duration — that is deliberate, and covered by the test below.
+  it("hits the requested runtime within one scene of slack, above the act floor", () => {
+    for (const target of [120, 360, 600]) {
+      const shots = shotsIn(deriveScenes(outline, "video", target));
+      const actual = shots * SECONDS_PER_SHOT;
+      expect(Math.abs(actual - target)).toBeLessThanOrEqual(
+        SECONDS_PER_SHOT * 3
+      );
+    }
+  });
+
+  it("never returns fewer shots than the act structure needs", () => {
+    const shots = shotsIn(deriveScenes(outline, "video", 1));
+    expect(shots).toBeGreaterThanOrEqual(12);
+  });
+
+  it("gives every shot a unique id and a screenplay line", () => {
+    const scenes = deriveScenes(outline, "video", 360);
+    const ids = scenes.flatMap((s) => s.shots.map((sh) => sh.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(scenes.flatMap((s) => s.shots).every((sh) => !!sh.screenplay)).toBe(true);
+  });
+
+  it("does not repeat the same camera angle back to back", () => {
+    const titles = deriveScenes(outline, "video", 360)
+      .flatMap((s) => s.shots)
+      .map((sh) => sh.title.split(" — ")[0]);
+    const runs = titles.filter((t, i) => i > 0 && t === titles[i - 1]);
+    expect(runs).toHaveLength(0);
   });
 });
