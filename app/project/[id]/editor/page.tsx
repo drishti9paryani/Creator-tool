@@ -1,28 +1,35 @@
 "use client";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { Play, Pause, Scissors, Download, Film, SkipBack } from "lucide-react";
+import {
+  Play,
+  Pause,
+  Scissors,
+  Download,
+  Film,
+  SkipBack,
+  Video,
+  Sparkles,
+} from "lucide-react";
 import { useStore } from "@/lib/store/project";
 import { CommandBar } from "@/components/workspace/CommandBar";
 import { downloadStoryboard } from "@/lib/export";
+import { recordAnimaticVideo } from "@/lib/exportVideo";
 import { ProjectLoading, ProjectMissing } from "@/components/workspace/ProjectGate";
 import { useHydrated } from "@/lib/store/useHydrated";
 
 const SECONDS_PER_CLIP = 2.5;
 
-// Editor — a storyboard playthrough, not a video player.
-//
-// The original had a play button that, when pressed, covered the frame with
-// "Video preview unavailable in this build". That's honest but useless: the
-// control existed only to refuse. Since every shot has a frame, playing them in
-// sequence at a fixed interval is a genuine animatic — the thing a director
-// actually wants at storyboard stage — and the badge keeps it from pretending
-// to be rendered footage.
+// Editor — a storyboard playthrough with Ken Burns motion and video export.
 export default function Editor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const project = useStore((s) => s.projects.find((p) => p.id === id));
   const pushToast = useStore((s) => s.pushToast);
+  const dismissToast = useStore((s) => s.dismissToast);
   const [playing, setPlaying] = useState(false);
+  const [kenBurns, setKenBurns] = useState(true);
+  const [exportingVideo, setExportingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState("");
   const [index, setIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const hydrated = useHydrated();
@@ -74,6 +81,49 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
   const current = clips[index];
   const totalSeconds = (clips.length * SECONDS_PER_CLIP).toFixed(1);
 
+  async function handleExportVideo() {
+    if (clips.length === 0) return;
+    setExportingVideo(true);
+    const toastId = pushToast({
+      message: "Rendering Ken Burns Video Animatic…",
+      variant: "loading",
+    });
+
+    try {
+      const blob = await recordAnimaticVideo(clips, {
+        secondsPerClip: SECONDS_PER_CLIP,
+        aspect: project?.format === "short" ? "9:16" : "16:9",
+        onProgress: (cur, tot) => {
+          setVideoProgress(`${cur}/${tot}`);
+        },
+      });
+
+      dismissToast(toastId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${project?.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "animatic"}-animatic.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      pushToast({
+        message: "Video animatic exported successfully!",
+        detail: "Saved with smooth Ken Burns motion and dialogue overlays.",
+        variant: "success",
+      });
+    } catch (err) {
+      dismissToast(toastId);
+      pushToast({
+        message: "Failed to render video",
+        detail: err instanceof Error ? err.message : undefined,
+        variant: "error",
+      });
+    } finally {
+      setExportingVideo(false);
+      setVideoProgress("");
+    }
+  }
+
   return (
     <>
       <div className="flex h-full flex-col px-5 py-6 pb-32 sm:px-8">
@@ -85,20 +135,48 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
               frames · ~{totalSeconds}s animatic
             </p>
           </div>
-          <button
-            onClick={() => {
-              downloadStoryboard(project);
-              pushToast({
-                message: "Storyboard exported",
-                detail:
-                  "A single HTML file with every frame and screenplay — openable and shareable offline.",
-                variant: "success",
-              });
-            }}
-            className="flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-sm font-medium text-black hover:bg-white/90"
-          >
-            <Download size={14} /> Export storyboard
-          </button>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setKenBurns((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${
+                kenBurns
+                  ? "border-amber-500/50 bg-amber-950/30 text-amber-300"
+                  : "border-[var(--color-border-soft)] bg-[var(--color-panel-2)] text-[var(--color-muted)]"
+              }`}
+            >
+              <Sparkles size={13} />
+              <span>Motion {kenBurns ? "ON" : "OFF"}</span>
+            </button>
+
+            <button
+              onClick={handleExportVideo}
+              disabled={exportingVideo || clips.length === 0}
+              className="flex items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel-2)] px-3.5 py-1.5 text-xs text-[var(--color-text)] transition hover:bg-[#26262a] disabled:opacity-40"
+            >
+              <Video size={14} />
+              <span>
+                {exportingVideo
+                  ? `Rendering ${videoProgress}…`
+                  : "Export Video (.webm)"}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                downloadStoryboard(project);
+                pushToast({
+                  message: "Storyboard exported",
+                  detail:
+                    "A single HTML file with every frame and screenplay — openable and shareable offline.",
+                  variant: "success",
+                });
+              }}
+              className="flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-sm font-medium text-black hover:bg-white/90"
+            >
+              <Download size={14} /> Export HTML
+            </button>
+          </div>
         </div>
 
         {/* Preview */}
@@ -107,10 +185,16 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
             {current?.image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                key={current.id}
+                key={`${current.id}-${playing ? "play" : "pause"}`}
                 src={current.image}
                 alt={current.label}
-                className="animate-fade-up h-full w-full object-contain"
+                className={`h-full w-full object-contain transition-transform duration-[2500ms] ease-out ${
+                  playing && kenBurns
+                    ? index % 2 === 0
+                      ? "scale-110"
+                      : "scale-105 translate-x-2"
+                    : "scale-100"
+                }`}
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
@@ -127,7 +211,7 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
             )}
 
             <span className="absolute left-3 top-3 rounded-md bg-black/65 px-2 py-1 text-[11px] text-white/80">
-              Storyboard animatic · not rendered video
+              {kenBurns ? "Ken Burns Motion Animatic" : "Storyboard Playthrough"}
             </span>
 
             {current && (
@@ -136,6 +220,11 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
                   {current.scene}
                 </p>
                 <p className="truncate text-sm text-white/90">{current.label}</p>
+                {current.screenplay && (
+                  <p className="mt-1 line-clamp-2 max-w-[640px] text-xs italic text-white/70">
+                    &ldquo;{current.screenplay}&rdquo;
+                  </p>
+                )}
               </div>
             )}
 

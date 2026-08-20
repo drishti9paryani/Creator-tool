@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Film, Trash2, Sparkles, Info, X } from "lucide-react";
+import { Plus, Film, Trash2, Sparkles, Info, X, Users } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store/project";
@@ -64,6 +64,12 @@ export function ProjectsHome({ liveMode }: { liveMode: boolean }) {
             />
             {liveMode ? "Live AI" : "Demo mode"}
           </span>
+          <Link
+            href="/characters"
+            className="flex items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel-2)] px-3.5 py-1.5 text-xs text-[var(--color-text)] transition hover:bg-[#26262a]"
+          >
+            <Users size={14} /> Character Bible
+          </Link>
           <Button variant="white" onClick={startNew}>
             <Plus size={15} /> New project
           </Button>

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Sparkles, Wand2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Wand2, BookOpen, Check } from "lucide-react";
 import type { Asset } from "@/lib/ai/types";
 import { Spinner } from "@/components/ui/Loader";
 import { Button } from "@/components/ui/Button";
+import { useCharacters } from "@/lib/store/characters";
+import { useStore } from "@/lib/store/project";
 
 // The asset detail / iterate screen: grouped asset list on the left, the
 // selected asset's description, voice and visual on the right.
@@ -41,6 +43,27 @@ export function AssetDetail({
     { key: "location", label: "Locations" },
     { key: "prop", label: "Props" },
   ];
+
+  const upsertChar = useCharacters((s) => s.upsert);
+  const pushToast = useStore((s) => s.pushToast);
+  const [savedToBible, setSavedToBible] = useState(false);
+
+  const handleSaveToBible = () => {
+    if (!selected || selected.type !== "character") return;
+    upsertChar({
+      name: selected.name,
+      description: selected.description,
+      wardrobe: selected.description ? undefined : undefined,
+      references: selected.image ? [selected.image] : [],
+    });
+    setSavedToBible(true);
+    pushToast({
+      message: `"${selected.name}" saved to Character Bible`,
+      detail: "This character is now locked and available across all projects.",
+      variant: "success",
+    });
+    setTimeout(() => setSavedToBible(false), 3000);
+  };
 
   return (
     <div className="flex h-full flex-col lg:flex-row">
@@ -97,10 +120,35 @@ export function AssetDetail({
       {selected && (
         <section className="flex-1 overflow-y-auto scroll-thin px-5 py-6 pb-32 sm:px-10">
           <div className="mx-auto max-w-[760px]">
-            <p className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
-              {selected.subtitle}
-            </p>
-            <h1 className="mt-1 text-2xl font-bold uppercase">{selected.name}</h1>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
+                  {selected.subtitle}
+                </p>
+                <h1 className="mt-1 text-2xl font-bold uppercase">{selected.name}</h1>
+              </div>
+
+              {selected.type === "character" && (
+                <button
+                  onClick={handleSaveToBible}
+                  className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs transition ${
+                    savedToBible
+                      ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-300"
+                      : "border-[var(--color-border-soft)] bg-[var(--color-panel-2)] text-[var(--color-muted)] hover:border-[var(--color-muted)] hover:text-white"
+                  }`}
+                >
+                  {savedToBible ? (
+                    <>
+                      <Check size={13} className="text-emerald-400" /> Saved to Bible
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen size={13} /> Save to Character Bible
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
             {/* Visual */}
             <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-panel-2)]">

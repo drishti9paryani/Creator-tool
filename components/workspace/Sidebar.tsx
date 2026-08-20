@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, LayoutGrid, Wrench, Scissors } from "lucide-react";
+import { Home, LayoutGrid, Wrench, Scissors, Users } from "lucide-react";
 
 // Left workspace navigation. Active item gets a filled pill.
 //
@@ -15,6 +15,7 @@ export function Sidebar({ projectId }: { projectId: string }) {
     { label: "Asset Designer", href: `/project/${projectId}/assets`, icon: LayoutGrid },
     { label: "Shot Builder", href: `/project/${projectId}/shots`, icon: Wrench },
     { label: "Editor", href: `/project/${projectId}/editor`, icon: Scissors },
+    { label: "Character Bible", href: "/characters", icon: Users, exact: true },
   ];
 
   return (

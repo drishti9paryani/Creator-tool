@@ -8,8 +8,8 @@
 // ponytail: in-memory counters, single process. If this ever runs multi-instance
 // behind a load balancer, move the counters to Redis — the interface won't change.
 
-const PER_PROJECT_LIMIT = Number(process.env.IMAGE_LIMIT_PER_PROJECT ?? 8);
-const PER_HOUR_LIMIT = Number(process.env.IMAGE_LIMIT_PER_HOUR ?? 60);
+export const PER_PROJECT_LIMIT = Number(process.env.IMAGE_LIMIT_PER_PROJECT ?? 150);
+export const PER_HOUR_LIMIT = Number(process.env.IMAGE_LIMIT_PER_HOUR ?? 200);
 const HOUR_MS = 60 * 60 * 1000;
 
 const perProject = new Map<string, number>();

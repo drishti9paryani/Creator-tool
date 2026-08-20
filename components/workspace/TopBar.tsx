@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BookOpen, X, ArrowLeft } from "lucide-react";
+import { BookOpen, X, ArrowLeft, Users } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { CreativeBrief } from "@/components/wizard/CreativeBrief";
 import { useStore } from "@/lib/store/project";
@@ -64,6 +64,14 @@ export function TopBar({
           />
           {liveMode ? "Live AI" : "Demo art"}
         </span>
+
+        <Link
+          href="/characters"
+          className="flex items-center gap-1.5 rounded-full bg-[var(--color-panel-2)] px-3.5 py-1.5 text-xs text-[var(--color-text)] transition hover:bg-[#26262a]"
+        >
+          <Users size={14} />
+          <span className="hidden sm:inline">Character Bible</span>
+        </Link>
 
         <button
           onClick={() => setBriefOpen(true)}

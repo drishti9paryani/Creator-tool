@@ -9,7 +9,7 @@ import {
   subjectOf,
 } from "@/lib/ai/story";
 import { placeholderArt, placeholderFrame } from "@/lib/ai/placeholder";
-import { chargeImage } from "@/lib/ai/budget";
+import { chargeImage, PER_PROJECT_LIMIT } from "@/lib/ai/budget";
 
 const IDEA_A = "A retired postman discovers the letters he never delivered";
 const IDEA_B = "Two rival chefs open competing food trucks in Lagos";
@@ -236,7 +236,7 @@ describe("placeholder art", () => {
 describe("image spend guard", () => {
   it("allows up to the per-project limit, then refuses with a reason", () => {
     const project = `test-${Math.random()}`;
-    const limit = Number(process.env.IMAGE_LIMIT_PER_PROJECT ?? 8);
+    const limit = PER_PROJECT_LIMIT;
     for (let i = 0; i < limit; i++) {
       expect(chargeImage(project).ok).toBe(true);
     }

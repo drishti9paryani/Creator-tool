@@ -1,9 +1,11 @@
 "use client";
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw, Users, BookOpen, X, Plus } from "lucide-react";
 import { useStore } from "@/lib/store/project";
+import { useCharacters, type CanonCharacter } from "@/lib/store/characters";
 import { ai } from "@/lib/ai/client";
 import { AssetCard } from "@/components/workspace/AssetCard";
 import { AddCard } from "@/components/workspace/AddCard";
@@ -44,10 +46,49 @@ export default function AssetDesigner({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [initState, setInitState] = useState<"idle" | "running" | "failed">("idle");
   const [addingType, setAddingType] = useState<AssetType | null>(null);
+  const [biblePickerOpen, setBiblePickerOpen] = useState(false);
+  const canonCharacters = useCharacters((s) => s.characters);
+  const linkToProject = useCharacters((s) => s.linkToProject);
   const ran = useRef(false);
   const hydrated = useHydrated();
 
   const styleId = project?.styleId ?? "";
+
+  const importFromBible = async (char: CanonCharacter) => {
+    const assetId = `${slugify(char.name)}-${Math.random().toString(36).slice(2, 6)}`;
+    const asset: Asset = {
+      id: assetId,
+      type: "character",
+      name: char.name.toUpperCase(),
+      subtitle: "Character",
+      description: char.description + (char.wardrobe ? ` Wardrobe: ${char.wardrobe}` : ""),
+      image: char.references?.[0],
+      status: char.references?.[0] ? "ready" : "generating",
+    };
+    addAsset(id, asset);
+    linkToProject(char.id, id);
+    setBiblePickerOpen(false);
+    pushToast({
+      message: `Imported "${char.name}" from Character Bible`,
+      variant: "success",
+    });
+
+    if (!char.references?.[0]) {
+      try {
+        const r = await ai.generateAssetImage({
+          id: assetId,
+          projectId: id,
+          name: char.name,
+          type: "character",
+          description: char.description,
+          styleId,
+        });
+        revealAsset(id, assetId, r.image);
+      } catch (e) {
+        updateAsset(id, assetId, { status: "ready" });
+      }
+    }
+  };
 
   // ── Project init: build the cast and generate its art ────────────────────
   const runInit = useCallback(async () => {
@@ -318,6 +359,14 @@ export default function AssetDesigner({
         <Section
           title="Characters"
           subtitle="Select any character to see details or iterate on them"
+          action={
+            <button
+              onClick={() => setBiblePickerOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel-2)] px-3 py-1.5 text-xs text-[var(--color-text)] transition hover:bg-[#26262a]"
+            >
+              <BookOpen size={13} /> Import from Bible
+            </button>
+          }
         >
           <Row cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             {characters.map((a) => (
@@ -388,6 +437,14 @@ export default function AssetDesigner({
         />
       )}
 
+      {biblePickerOpen && (
+        <BiblePickerModal
+          characters={canonCharacters}
+          onClose={() => setBiblePickerOpen(false)}
+          onSelect={importFromBible}
+        />
+      )}
+
       <CommandBar placeholder="Ask for a change — e.g. make the palette colder…" />
     </>
   );
@@ -396,20 +453,112 @@ export default function AssetDesigner({
 function Section({
   title,
   subtitle,
+  action,
   children,
 }: {
   title: string;
   subtitle: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="mb-9">
-      <div className="mb-3">
-        <h2 className="text-lg font-bold">{title}</h2>
-        <p className="text-xs text-[var(--color-muted)]">{subtitle}</p>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold">{title}</h2>
+          <p className="text-xs text-[var(--color-muted)]">{subtitle}</p>
+        </div>
+        {action}
       </div>
       {children}
     </section>
+  );
+}
+
+function BiblePickerModal({
+  characters,
+  onClose,
+  onSelect,
+}: {
+  characters: CanonCharacter[];
+  onClose: () => void;
+  onSelect: (c: CanonCharacter) => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-[600px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between pb-4 border-b border-[var(--color-border-soft)]">
+          <div className="flex items-center gap-2">
+            <Users size={18} className="text-[var(--color-accent)]" />
+            <h3 className="text-lg font-bold">Import from Character Bible</h3>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="text-[var(--color-muted)] hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mt-4 max-h-[400px] overflow-y-auto scroll-thin space-y-3">
+          {characters.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-sm text-[var(--color-muted)]">
+                No characters in the Bible yet.
+              </p>
+              <Link
+                href="/characters"
+                className="mt-3 inline-flex items-center gap-1 text-xs text-[var(--color-accent)] hover:underline"
+              >
+                Go to Character Bible &rarr;
+              </Link>
+            </div>
+          ) : (
+            characters.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-2)]/60 p-3 transition hover:border-[var(--color-border)]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black/40 text-xs font-bold text-white/70">
+                    {c.references?.[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={c.references[0]}
+                        alt={c.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      c.name.slice(0, 2).toUpperCase()
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-[var(--color-text)] truncate">
+                      {c.name}
+                    </p>
+                    <p className="text-xs text-[var(--color-muted)] truncate max-w-[320px]">
+                      {c.description || "No description"}
+                    </p>
+                  </div>
+                </div>
+                <Button variant="pill" onClick={() => onSelect(c)}>
+                  <Plus size={13} /> Add to Cast
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

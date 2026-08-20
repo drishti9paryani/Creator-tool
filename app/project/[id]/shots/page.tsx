@@ -4,6 +4,7 @@ import { use, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Plus,
   Sparkles,
   Trash2,
@@ -11,8 +12,11 @@ import {
   Film,
   Wand2,
   PenLine,
+  Search,
+  Layers,
 } from "lucide-react";
 import { useStore } from "@/lib/store/project";
+import { useCharacters, canonPrompt } from "@/lib/store/characters";
 import { ai } from "@/lib/ai/client";
 import { CommandBar } from "@/components/workspace/CommandBar";
 import { EditableTitle } from "@/components/ui/EditableTitle";
@@ -26,6 +30,30 @@ type Selection =
   | { kind: "none" }
   | { kind: "scene"; sceneId: string }
   | { kind: "shot"; sceneId: string; shotId: string };
+
+const ACT_LABELS = [
+  "Act I: Setup",
+  "Act II: Confrontation",
+  "Act III: Escalation",
+  "Act IV: Climax & Resolution",
+];
+
+function partitionActs(scenes: Scene[]) {
+  if (scenes.length < 8) {
+    return [{ actTitle: "Scenes", scenes }];
+  }
+  const count = scenes.length;
+  const q1 = Math.ceil(count / 4);
+  const q2 = Math.ceil(count / 2);
+  const q3 = Math.ceil((count * 3) / 4);
+
+  return [
+    { actTitle: ACT_LABELS[0], scenes: scenes.slice(0, q1) },
+    { actTitle: ACT_LABELS[1], scenes: scenes.slice(q1, q2) },
+    { actTitle: ACT_LABELS[2], scenes: scenes.slice(q2, q3) },
+    { actTitle: ACT_LABELS[3], scenes: scenes.slice(q3) },
+  ].filter((a) => a.scenes.length > 0);
+}
 
 export default function ShotBuilder({
   params,
@@ -49,7 +77,63 @@ export default function ShotBuilder({
   const [collapsed, setCollapsed] = useState(false);
   const [showHint, setShowHint] = useState(true);
   const [writing, setWriting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [collapsedActs, setCollapsedActs] = useState<Record<string, boolean>>({});
+  const [batchGenerating, setBatchGenerating] = useState(false);
   const hydrated = useHydrated();
+
+  const toggleAct = (actTitle: string) => {
+    setCollapsedActs((prev) => ({ ...prev, [actTitle]: !prev[actTitle] }));
+  };
+
+  async function generateAllStoryboards(targetScenes?: Scene[]) {
+    if (!project) return;
+    const scopeScenes = targetScenes ?? project.scenes;
+    const emptyShots: { sceneId: string; shotId: string }[] = [];
+    scopeScenes.forEach((sc) => {
+      sc.shots.forEach((sh) => {
+        if (!sh.image && sh.status !== "generating") {
+          emptyShots.push({ sceneId: sc.id, shotId: sh.id });
+        }
+      });
+    });
+
+    if (emptyShots.length === 0) {
+      pushToast({
+        message: "All storyboard frames are already generated",
+        variant: "success",
+      });
+      return;
+    }
+
+    setBatchGenerating(true);
+    const toastId = pushToast({
+      message: `Generating ${emptyShots.length} storyboard frames…`,
+      variant: "loading",
+    });
+
+    try {
+      let count = 0;
+      for (const item of emptyShots) {
+        await regenStoryboard(item.sceneId, item.shotId);
+        count++;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      dismissToast(toastId);
+      pushToast({
+        message: `Generated all ${count} storyboard frames`,
+        variant: "success",
+      });
+    } catch (e) {
+      dismissToast(toastId);
+      pushToast({
+        message: "Batch generation interrupted",
+        variant: "error",
+      });
+    } finally {
+      setBatchGenerating(false);
+    }
+  }
 
   // The store loads from IndexedDB asynchronously — "no project" is meaningless
   // until hydration finishes, and showing the missing-project screen first
@@ -114,7 +198,14 @@ export default function ShotBuilder({
         castNotes: project!.assets
           .filter((a) => a.type !== "prop")
           .slice(0, 3)
-          .map((a) => `${a.name}: ${a.description ?? ""}`),
+          .map((a) => {
+            const canon = useCharacters
+              .getState()
+              .characters.find(
+                (c) => c.name.toLowerCase() === a.name.toLowerCase()
+              );
+            return canon ? canonPrompt(canon) : `${a.name}: ${a.description ?? ""}`;
+          }),
         styleId: project!.styleId,
         format: project!.format,
       });
@@ -155,14 +246,41 @@ export default function ShotBuilder({
     }
   }
 
+  const totalShots = project.scenes.reduce((n, s) => n + s.shots.length, 0);
+  const readyShots = project.scenes.reduce(
+    (n, s) => n + s.shots.filter((sh) => sh.image).length,
+    0
+  );
+
+  const filteredScenes = project.scenes.filter((sc) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      sc.title.toLowerCase().includes(q) ||
+      sc.description.toLowerCase().includes(q) ||
+      sc.shots.some(
+        (sh) =>
+          sh.title.toLowerCase().includes(q) ||
+          sh.screenplay?.toLowerCase().includes(q)
+      )
+    );
+  });
+
+  const acts = partitionActs(filteredScenes);
+
   return (
     <>
       <div className="flex h-full">
         {/* Storyline panel */}
         {!collapsed ? (
-          <aside className="w-[240px] shrink-0 overflow-y-auto scroll-thin border-r border-[var(--color-border-soft)] px-4 py-5 sm:w-[260px]">
+          <aside className="w-[260px] shrink-0 overflow-y-auto scroll-thin border-r border-[var(--color-border-soft)] px-3.5 py-4 sm:w-[280px]">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold">Storyline</h2>
+              <div>
+                <h2 className="text-sm font-bold">Storyline</h2>
+                <p className="text-[11px] text-[var(--color-muted)]">
+                  {readyShots}/{totalShots} frames ready
+                </p>
+              </div>
               <button
                 onClick={() => setCollapsed(true)}
                 aria-label="Collapse storyline"
@@ -172,34 +290,114 @@ export default function ShotBuilder({
               </button>
             </div>
 
+            {/* Search filter */}
+            {project.scenes.length > 3 && (
+              <div className="relative mt-3">
+                <Search
+                  size={13}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-muted-2)]"
+                />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Filter scenes or shots…"
+                  className="w-full rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-panel-2)]/80 py-1.5 pl-7 pr-3 text-xs outline-none placeholder:text-[var(--color-muted-2)] focus:border-[var(--color-border)]"
+                />
+              </div>
+            )}
+
+            {/* Batch generate button */}
+            {readyShots < totalShots && (
+              <button
+                onClick={() => generateAllStoryboards()}
+                disabled={batchGenerating}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-panel)] py-1.5 text-xs text-[var(--color-text)] transition hover:border-[var(--color-muted)] disabled:opacity-50"
+              >
+                <Sparkles size={12} className="text-amber-400" />
+                <span>
+                  {batchGenerating
+                    ? "Generating frames…"
+                    : `Generate all frames (${totalShots - readyShots} left)`}
+                </span>
+              </button>
+            )}
+
             {project.scenes.length === 0 && (
               <p className="mt-4 text-xs leading-relaxed text-[var(--color-muted)]">
                 No scenes yet. Add one below to start building your shot list.
               </p>
             )}
 
-            <div className="mt-4 space-y-3">
-              {project.scenes.map((sc) => (
-                <SceneItem
-                  key={sc.id}
-                  scene={sc}
-                  selectedShotId={sel.kind === "shot" ? sel.shotId : undefined}
-                  sceneSelected={sel.kind === "scene" && sel.sceneId === sc.id}
-                  onSelectScene={() => setSel({ kind: "scene", sceneId: sc.id })}
-                  onSelectShot={(shotId) =>
-                    setSel({ kind: "shot", sceneId: sc.id, shotId })
-                  }
-                  onAddShot={() => addShot(id, sc.id)}
-                  onGenerateVideos={() => generateVideo({ sceneId: sc.id })}
-                />
-              ))}
+            {/* Act Groups / Scenes Accordion */}
+            <div className="mt-4 space-y-4">
+              {acts.map((act, actIdx) => {
+                const isActCollapsed = !!collapsedActs[act.actTitle];
+                const actEmptyShots = act.scenes.reduce(
+                  (n, s) => n + s.shots.filter((sh) => !sh.image).length,
+                  0
+                );
+
+                return (
+                  <div
+                    key={act.actTitle}
+                    className="rounded-xl border border-[var(--color-border-soft)]/60 bg-[var(--color-panel)]/30 p-2"
+                  >
+                    {acts.length > 1 && (
+                      <div className="mb-2 flex items-center justify-between border-b border-[var(--color-border-soft)]/60 pb-1.5">
+                        <button
+                          onClick={() => toggleAct(act.actTitle)}
+                          className="flex items-center gap-1.5 text-left text-xs font-bold text-[var(--color-text)] hover:text-white"
+                        >
+                          {isActCollapsed ? (
+                            <ChevronRight size={13} className="text-[var(--color-muted)]" />
+                          ) : (
+                            <ChevronDown size={13} className="text-[var(--color-muted)]" />
+                          )}
+                          <span>{act.actTitle}</span>
+                        </button>
+
+                        {actEmptyShots > 0 && !isActCollapsed && (
+                          <button
+                            onClick={() => generateAllStoryboards(act.scenes)}
+                            disabled={batchGenerating}
+                            title={`Generate all frames in ${act.actTitle}`}
+                            className="text-[10px] text-[var(--color-accent)] hover:underline disabled:opacity-50"
+                          >
+                            Gen Act ({actEmptyShots})
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {!isActCollapsed && (
+                      <div className="space-y-2.5">
+                        {act.scenes.map((sc) => (
+                          <SceneItem
+                            key={sc.id}
+                            scene={sc}
+                            selectedShotId={sel.kind === "shot" ? sel.shotId : undefined}
+                            sceneSelected={sel.kind === "scene" && sel.sceneId === sc.id}
+                            onSelectScene={() => setSel({ kind: "scene", sceneId: sc.id })}
+                            onSelectShot={(shotId) =>
+                              setSel({ kind: "shot", sceneId: sc.id, shotId })
+                            }
+                            onAddShot={() => addShot(id, sc.id)}
+                            onGenerateVideos={() => generateVideo({ sceneId: sc.id })}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             <button
               onClick={() => addScene(id)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border-soft)] py-2 text-sm text-[var(--color-muted)] transition hover:border-[var(--color-muted)] hover:text-[var(--color-text)]"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border-soft)] py-2 text-xs text-[var(--color-muted)] transition hover:border-[var(--color-muted)] hover:text-[var(--color-text)]"
             >
-              <Plus size={14} /> Add scene
+              <Plus size={13} /> Add scene
             </button>
           </aside>
         ) : (
