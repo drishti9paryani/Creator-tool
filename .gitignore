@@ -10,3 +10,4 @@ tsconfig.tsbuildinfo
 .claude/settings.local.json
 .superpowers/
 .worktrees/
+data/*.sqlite*
