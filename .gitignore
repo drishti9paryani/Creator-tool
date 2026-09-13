@@ -9,3 +9,4 @@ dev.err.log
 tsconfig.tsbuildinfo
 .claude/settings.local.json
 .superpowers/
+.worktrees/
