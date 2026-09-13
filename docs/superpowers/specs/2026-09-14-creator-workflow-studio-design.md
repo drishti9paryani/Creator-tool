@@ -13,7 +13,8 @@ The system must keep the human in control of creative and paid steps. Every run 
 ## Approved decisions
 
 - Extend the existing CreatorStudio repository.
-- Use a node canvas with guided inspector panels.
+- Give clients a five-step guided journey with large controls and plain language.
+- Keep the node canvas, providers, retries, costs, and logs in a private operator view.
 - Support short vertical and long-form video.
 - Let Telegram create projects, approve gates, monitor, pause, cancel, and receive outputs.
 - Use OpenClaw as controller and Codex execution path.
@@ -35,13 +36,31 @@ IndexedDB cannot support shared Telegram jobs. The app has a video generation in
 
 ## Product layout
 
-The workspace has three columns:
+The product has two connected views.
+
+### Client view
+
+The client sees five guided steps:
+
+1. **Tell us the idea:** type, speak, or send it through Telegram.
+2. **Approve the words:** read the script and choose Yes, continue or I want a change.
+3. **Choose the look:** select from three clear visual directions.
+4. **Approve the preview:** watch a short preview before paid rendering.
+5. **Receive the video:** download it or receive it through Telegram.
+
+Each screen has one main decision, large type, large controls, a visible Back action, automatic saving, and a Continue where you stopped entry point. Provider names, model settings, node connections, retries, logs, and file handling are hidden. A client may complete every approval through Telegram without opening the technical workspace.
+
+Progress uses plain statements such as Creating your pictures - about four minutes. Errors offer Try again or Ask for help. Paid steps state the maximum rupee amount before the approval button. Dragging is never required. Voice input is available wherever typing would otherwise be necessary.
+
+### Operator view
+
+The operator workspace has three columns:
 
 1. A left rail for Projects, Templates, Character Bible, Runs, Deliveries, and Settings.
-2. A central visual canvas with draggable nodes, directional edges, status rings, artifact previews, minimap, and fit controls. Small screens use a guided read-only flow.
-3. A right inspector for the selected node's inputs, provider, quality, estimated cost, dependencies, progress, outputs, versions, and allowed actions.
+2. A central canvas with draggable nodes, directional edges, status rings, artifact previews, minimap, and fit controls.
+3. A right inspector for selected-node inputs, provider, quality, estimated cost, dependencies, progress, outputs, versions, and allowed actions.
 
-A fixed top bar shows the project title, format, run state, projected and actual spending, save state, and Run or Resume action.
+A fixed top bar shows project title, format, client stage, run state, projected and actual spending, save state, and the primary operator action. The client and operator views read and update the same workflow state.
 
 The default flow is:
 
@@ -230,6 +249,10 @@ Disk use must be reduced or a strict cache ceiling proven before deployment.
 
 The release is accepted when:
 
+- an older non-technical client can complete the five-step journey without seeing provider settings or node controls;
+- the client always sees one primary action, a Back action, saved progress, and plain-language status;
+- every action is keyboard accessible, has a visible focus state, and meets a minimum 44 by 44 pixel target;
+- text remains usable at 200 percent browser zoom and at mobile width;
 - projects can start from web and Telegram;
 - both surfaces show the same state;
 - the canvas reports truthful node states;
