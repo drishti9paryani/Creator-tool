@@ -8,3 +8,4 @@ dev.out.log
 dev.err.log
 tsconfig.tsbuildinfo
 .claude/settings.local.json
+.superpowers/
