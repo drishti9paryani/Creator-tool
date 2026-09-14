@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { WorkflowRepository } from "@/lib/workflow/repository";
+import { deriveOutlines } from "@/lib/ai/story";
+import { placeholderFrame } from "@/lib/ai/placeholder";
 
 export type WorkflowApiResult = {
   status: number;
@@ -74,9 +76,27 @@ export function createWorkflowApi(repository: WorkflowRepository) {
         return { status: 404, body: { error: "This project could not be found." } };
       }
       try {
+        let project = repository.apply(id, parsed.data);
+        if (parsed.data.type === "idea.submitted") {
+          const outline = deriveOutlines(parsed.data.idea, "video")[0];
+          project = repository.apply(id, {
+            type: "script.generated",
+            script: outline.description,
+          });
+        }
+        if (parsed.data.type === "look.selected") {
+          project = repository.apply(id, {
+            type: "preview.generated",
+            assetIds: [
+              placeholderFrame("Opening moment", parsed.data.lookId),
+              placeholderFrame("Closing moment", parsed.data.lookId),
+            ],
+            maximumCostInr: 0,
+          });
+        }
         return {
           status: 200,
-          body: { project: repository.apply(id, parsed.data) },
+          body: { project },
         };
       } catch (error) {
         return {

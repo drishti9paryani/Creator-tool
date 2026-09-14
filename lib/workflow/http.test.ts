@@ -6,14 +6,17 @@ import { createWorkflowApi } from "@/lib/workflow/http";
 import { createWorkflowRepository } from "@/lib/workflow/repository";
 
 const directories: string[] = [];
+const repositories: Array<ReturnType<typeof createWorkflowRepository>> = [];
 function setup() {
   const directory = mkdtempSync(join(tmpdir(), "creator-api-test-"));
   directories.push(directory);
   const repository = createWorkflowRepository(join(directory, "workflow.sqlite"));
+  repositories.push(repository);
   return { repository, api: createWorkflowApi(repository) };
 }
 
 afterEach(() => {
+  for (const repository of repositories.splice(0)) repository.close();
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -31,7 +34,6 @@ describe("workflow API", () => {
     expect(api.list().body).toMatchObject({
       projects: [{ title: "Sunday lunch" }],
     });
-    repository.close();
   });
 
   it("returns a plain validation error for malformed input", () => {
@@ -42,7 +44,6 @@ describe("workflow API", () => {
       body: { error: "Check the project details and try again." },
     });
     expect(repository.list()).toHaveLength(0);
-    repository.close();
   });
 
   it("applies a validated event and returns the updated project", () => {
@@ -56,11 +57,43 @@ describe("workflow API", () => {
 
     expect(result).toMatchObject({
       status: 200,
-      body: { project: { idea: "A warm family film", status: "working" } },
+      body: {
+        project: {
+          idea: "A warm family film",
+          stage: "words",
+          status: "awaiting_approval",
+        },
+      },
     });
-    repository.close();
+    const returned = result.body.project as { script: string };
+    expect(returned.script.length).toBeGreaterThan(40);
   });
 
+  it("creates a no-cost preview after the client chooses a look", () => {
+    const { api, repository } = setup();
+    const project = repository.create({ title: "Sunday lunch", source: "web" });
+    api.apply(project.id, { type: "idea.submitted", idea: "A warm family film" });
+    api.apply(project.id, { type: "script.approved" });
+
+    const result = api.apply(project.id, {
+      type: "look.selected",
+      lookId: "warm-natural",
+    });
+
+    expect(result).toMatchObject({
+      status: 200,
+      body: {
+        project: {
+          stage: "preview",
+          status: "awaiting_approval",
+          maximumCostInr: 0,
+        },
+      },
+    });
+    const returned = result.body.project as { previewAssetIds: string[] };
+    expect(returned.previewAssetIds).toHaveLength(2);
+    expect(returned.previewAssetIds[0]).toMatch(/^data:image\/svg\+xml/);
+  });
   it("distinguishes missing projects from rejected transitions", () => {
     const { api, repository } = setup();
     const project = repository.create({ title: "Sunday lunch", source: "web" });
@@ -73,6 +106,5 @@ describe("workflow API", () => {
       status: 409,
       body: { error: "Script approval is not allowed during idea" },
     });
-    repository.close();
   });
 });
