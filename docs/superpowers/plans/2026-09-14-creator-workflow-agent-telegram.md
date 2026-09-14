@@ -57,7 +57,7 @@ type IntegrationEnvelope = {
 };
 ```
 
-Sign `timestamp + "." + rawBody` using HMAC-SHA256. Read `OPENCLAW_WEBHOOK_SECRET` and comma-separated `OPENCLAW_ALLOWED_SENDER_IDS`. Store processed event IDs in SQLite with a unique constraint.
+Sign `timestamp + "." + senderId + "." + rawBody` using HMAC-SHA256 so the allowlisted sender identity cannot be changed after signing. Read `OPENCLAW_WEBHOOK_SECRET` and comma-separated `OPENCLAW_ALLOWED_SENDER_IDS`. Store processed event IDs in SQLite with a unique constraint.
 
 - [ ] **Step 4: Implement commands**
 

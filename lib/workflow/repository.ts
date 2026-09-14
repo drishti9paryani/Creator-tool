@@ -17,6 +17,7 @@ export type WorkflowRepository = {
   list(): WorkflowProject[];
   apply(id: string, event: WorkflowEvent): WorkflowProject;
   events(id: string): StoredWorkflowEvent[];
+  claimIntegrationEvent(eventId: string): boolean;
   close(): void;
 };
 
@@ -46,6 +47,11 @@ export function createWorkflowRepository(path?: string): WorkflowRepository {
     VALUES
       (@id, @snapshotJson, @stage, @status, @updatedAt, 0)
   `);
+  const claimIntegrationEvent = database.prepare(`
+    INSERT OR IGNORE INTO integration_events (event_id, created_at)
+    VALUES (?, ?)
+  `);
+
   const updateProject = database.prepare(`
     UPDATE workflow_projects
     SET snapshot_json = @snapshotJson,
@@ -127,6 +133,10 @@ export function createWorkflowRepository(path?: string): WorkflowRepository {
       return rows.map((row) => parseProject(row) as WorkflowProject);
     },
     apply: saveEvent,
+    claimIntegrationEvent(eventId) {
+      const result = claimIntegrationEvent.run(eventId, new Date().toISOString());
+      return result.changes === 1;
+    },
     events(id) {
       const rows = database
         .prepare(

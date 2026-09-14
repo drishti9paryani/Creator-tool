@@ -38,6 +38,11 @@ export function openWorkflowDatabase(path = workflowDatabasePath()): WorkflowDat
       ON workflow_projects(last_event_id DESC);
     CREATE INDEX IF NOT EXISTS workflow_events_project
       ON workflow_events(project_id, event_id);
+
+    CREATE TABLE IF NOT EXISTS integration_events (
+      event_id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL
+    );
   `);
   return database;
 }
